@@ -1,0 +1,142 @@
+{
+  "config": {
+    "seed": "42",
+    "img_size": "224",
+    "batch_size": "32",
+    "epochs": "10",
+    "lr": "0.0001",
+    "weight_decay": "0.0001",
+    "subset_per_class": "1000",
+    "patience": "3",
+    "grad_clip_norm": "1.0",
+    "backbone": "resnet18",
+    "device": "cuda"
+  },
+  "unimodal_binary_acc": 0.9111675126903553,
+  "unimodal_transform_acc": 0.7504230118443317,
+  "multitask_binary_acc": 0.9060913705583756,
+  "multitask_transform_acc": 0.7351945854483926,
+  "ablation_results": [
+    {
+      "w1": 1.0,
+      "w2": 0.0,
+      "label": "binary_only",
+      "val_acc_bin": 0.9060913705583756,
+      "val_acc_trans": 0.33587140439932317
+    },
+    {
+      "w1": 0.75,
+      "w2": 0.25,
+      "label": "binary_dominant",
+      "val_acc_bin": 0.9086294416243654,
+      "val_acc_trans": 0.7123519458544839
+    },
+    {
+      "w1": 0.5,
+      "w2": 0.5,
+      "label": "equal",
+      "val_acc_bin": 0.9052453468697124,
+      "val_acc_trans": 0.7419627749576988
+    },
+    {
+      "w1": 0.25,
+      "w2": 0.75,
+      "label": "transform_dominant",
+      "val_acc_bin": 0.8900169204737732,
+      "val_acc_trans": 0.745346869712352
+    },
+    {
+      "w1": 0.0,
+      "w2": 1.0,
+      "label": "transform_only",
+      "val_acc_bin": 0.5,
+      "val_acc_trans": 0.751269035532995
+    }
+  ],
+  "per_transformation_breakdown": [
+    {
+      "transformation": "original",
+      "overall_acc": 0.9125,
+      "real_acc": 0.87,
+      "fake_acc": 0.955,
+      "n_total": 400,
+      "n_real": 200,
+      "n_fake": 200
+    },
+    {
+      "transformation": "transmitted",
+      "overall_acc": 0.925,
+      "real_acc": 0.88,
+      "fake_acc": 0.97,
+      "n_total": 400,
+      "n_real": 200,
+      "n_fake": 200
+    },
+    {
+      "transformation": "redigitalized",
+      "overall_acc": 0.8795811518324608,
+      "real_acc": 0.87,
+      "fake_acc": 0.8901098901098901,
+      "n_total": 382,
+      "n_real": 200,
+      "n_fake": 182
+    }
+  ],
+  "cross_class_traces": [
+    {
+      "binary_class": "real",
+      "transform_type": "original",
+      "n_samples": 200,
+      "binary_acc": 0.87,
+      "binary_misclass_rate": 0.13,
+      "avg_confidence": 0.8478643894195557,
+      "transform_acc": 0.71
+    },
+    {
+      "binary_class": "real",
+      "transform_type": "transmitted",
+      "n_samples": 200,
+      "binary_acc": 0.88,
+      "binary_misclass_rate": 0.12,
+      "avg_confidence": 0.8786579370498657,
+      "transform_acc": 0.495
+    },
+    {
+      "binary_class": "real",
+      "transform_type": "redigitalized",
+      "n_samples": 200,
+      "binary_acc": 0.87,
+      "binary_misclass_rate": 0.13,
+      "avg_confidence": 0.8532461524009705,
+      "transform_acc": 0.815
+    },
+    {
+      "binary_class": "fake",
+      "transform_type": "original",
+      "n_samples": 200,
+      "binary_acc": 0.955,
+      "binary_misclass_rate": 0.04500000000000004,
+      "avg_confidence": 0.9323697090148926,
+      "transform_acc": 0.885
+    },
+    {
+      "binary_class": "fake",
+      "transform_type": "transmitted",
+      "n_samples": 200,
+      "binary_acc": 0.97,
+      "binary_misclass_rate": 0.030000000000000027,
+      "avg_confidence": 0.9499155282974243,
+      "transform_acc": 0.705
+    },
+    {
+      "binary_class": "fake",
+      "transform_type": "redigitalized",
+      "n_samples": 182,
+      "binary_acc": 0.8901098901098901,
+      "binary_misclass_rate": 0.10989010989010994,
+      "avg_confidence": 0.870591402053833,
+      "transform_acc": 0.8076923076923077
+    }
+  ],
+  "total_training_time_minutes": 1085.328001844883
+}
