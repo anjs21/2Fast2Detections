@@ -28,6 +28,8 @@ Improvements over v1:
 import os
 import time
 import torch
+import matplotlib
+matplotlib.use('Agg')
 import pandas as pd
 from torch.utils.data import DataLoader
 from sklearn.model_selection import train_test_split
@@ -88,12 +90,10 @@ if __name__ == "__main__":
     ]
 
     # 1d. Balanced subset
-    balanced_df = (
-        df_clean.groupby(["binary_label", "transform_label"], group_keys=False)
-        .apply(lambda x: x.sample(min(len(x), CONFIG["subset_per_class"]),
-                                   random_state=CONFIG["seed"]))
-        .reset_index(drop=True)
-    )
+    balanced_df = pd.concat([
+        grp.sample(min(len(grp), CONFIG["subset_per_class"]), random_state=CONFIG["seed"])
+        for _, grp in df_clean.groupby(["binary_label", "transform_label"])
+    ]).reset_index(drop=True)
 
     # 1e. Stratified 80/20 split
     train_df, val_df = train_test_split(
