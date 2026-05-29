@@ -49,6 +49,15 @@ CONFIG = {
     "grad_clip_norm": 1.0,       # Gradient clipping max norm
     "backbone": "resnet18",      # Options: resnet18, resnet50, efficientnet_b0
     "device": "cuda" if torch.cuda.is_available() else "cpu",
+    # Differential learning & backbone freezing
+    "freeze_epochs": 3,          # Epochs to keep backbone frozen at start (0 = no freeze)
+    "backbone_lr": 1e-5,         # LR for backbone after unfreeze
+    "head_lr": 1e-4,             # LR for task heads
+    # Loss weighting method: "static", "uncertainty", or "gradnorm"
+    # Note: "gradnorm" is incompatible with freeze_epochs > 0
+    "loss_weighting_method": "static",
+    "gradnorm_alpha": 1.5,       # GradNorm task-asymmetry exponent
+    "gradnorm_weight_lr": 1e-3,  # LR for GradNorm task weight optimizer
 }
 
 # Silence warnings for clean console output

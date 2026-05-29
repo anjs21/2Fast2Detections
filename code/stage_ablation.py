@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 
 from config import CONFIG, RESULTS_DIR
 from models import MultiTaskModel
-from training import train_multitask_model, evaluate_multitask
+from training import (train_multitask_model, evaluate_multitask,
+                      StaticWeighter, UncertaintyLoss, GradNormBalancer)
 
 
 def run_ablation_study(train_loader, val_loader):
@@ -25,11 +26,13 @@ def run_ablation_study(train_loader, val_loader):
         ablation_df: DataFrame with results for each weight configuration
     """
     weight_configs = [
-        (1.0, 0.0, "binary_only"),
-        (0.75, 0.25, "binary_dominant"),
-        (0.5, 0.5, "equal"),
-        (0.25, 0.75, "transform_dominant"),
-        (0.0, 1.0, "transform_only"),
+        ("static",      1.0,  0.0,  "binary_only"),
+        ("static",      0.75, 0.25, "binary_dominant"),
+        ("static",      0.5,  0.5,  "equal"),
+        ("static",      0.25, 0.75, "transform_dominant"),
+        ("static",      0.0,  1.0,  "transform_only"),
+        ("uncertainty", None, None, "uncertainty"),
+        ("gradnorm",    None, None, "gradnorm"),
     ]
 
     ablation_results = []
@@ -38,20 +41,28 @@ def run_ablation_study(train_loader, val_loader):
     print("ABLATION STUDY: Loss Weight Sweep")
     print(f"{'#'*60}")
 
-    for w1, w2, label in weight_configs:
-        print(f"\n--- Config: w1={w1}, w2={w2} ({label}) ---")
+    for method, w1, w2, label in weight_configs:
+        print(f"\n--- Config: method={method}, label={label} ---")
+
+        if method == "static":
+            loss_weighter = StaticWeighter(w1, w2)
+        elif method == "uncertainty":
+            loss_weighter = UncertaintyLoss()
+        elif method == "gradnorm":
+            loss_weighter = GradNormBalancer(CONFIG["gradnorm_alpha"], CONFIG["gradnorm_weight_lr"])
 
         model = MultiTaskModel(backbone_name=CONFIG["backbone"]).to(CONFIG["device"])
         model, logger = train_multitask_model(
-            model, train_loader, val_loader, CONFIG, w1=w1, w2=w2, tag=f"ablation_{label}"
+            model, train_loader, val_loader, CONFIG,
+            loss_weighter=loss_weighter, tag=f"ablation_{label}"
         )
 
-        # Final evaluation on best model
         criterion_bin = nn.CrossEntropyLoss()
         criterion_trans = nn.CrossEntropyLoss()
         val_metrics = evaluate_multitask(model, val_loader, criterion_bin, criterion_trans, CONFIG["device"])
 
         result = {
+            "method": method,
             "w1": w1,
             "w2": w2,
             "label": label,
@@ -71,7 +82,7 @@ def run_ablation_study(train_loader, val_loader):
 
     for _, row in ablation_df.iterrows():
         ax.annotate(
-            f"w1={row['w1']:.2f}\nw2={row['w2']:.2f}",
+            row["label"],
             (row["val_acc_bin"] * 100, row["val_acc_trans"] * 100),
             textcoords="offset points", xytext=(10, 10), fontsize=9,
             arrowprops=dict(arrowstyle="->", color="gray", lw=0.8)
@@ -97,7 +108,7 @@ def run_ablation_study(train_loader, val_loader):
     ax.set_ylabel("Validation Accuracy (%)")
     ax.set_title("Ablation Study: Effect of Loss Weights on Task Performance")
     ax.set_xticks(x)
-    ax.set_xticklabels([f"w1={r['w1']}\nw2={r['w2']}" for _, r in ablation_df.iterrows()])
+    ax.set_xticklabels(ablation_df["label"].tolist())
     ax.legend()
     ax.set_ylim(0, 105)
     plt.tight_layout()

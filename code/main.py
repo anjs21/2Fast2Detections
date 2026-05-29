@@ -38,6 +38,7 @@ from config import (
     CONFIG, DATA_DIR, METADATA_TRAIN_VAL_CSV, PROJECT_ROOT,
     download_train_val_data, download_test_data,
 )
+from training import StaticWeighter, UncertaintyLoss, GradNormBalancer
 from data import (
     scan_directory, MultiTaskDataset, SingleTaskDataset,
     get_train_transform, get_val_transform,
@@ -159,8 +160,16 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     # PHASE 3: MULTI-TASK JOINT TRAINING
     # ------------------------------------------------------------------
+    method = CONFIG["loss_weighting_method"]
+    if method == "uncertainty":
+        loss_weighter = UncertaintyLoss()
+    elif method == "gradnorm":
+        loss_weighter = GradNormBalancer(CONFIG["gradnorm_alpha"], CONFIG["gradnorm_weight_lr"])
+    else:
+        loss_weighter = StaticWeighter(0.5, 0.5)
+
     model_mt, results, multitask_bin_acc, multitask_trans_acc = run_multimodal_training(
-        mt_train_loader, mt_val_loader, val_df, val_tfm
+        mt_train_loader, mt_val_loader, val_df, val_tfm, loss_weighter=loss_weighter
     )
 
     # ------------------------------------------------------------------
