@@ -39,7 +39,7 @@ os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
 
 CONFIG = {
     "seed": 42,
-    "img_size": 224,
+    "img_size": 256,
     "batch_size": 32,
     "epochs": 10,
     "lr": 1e-4,
