@@ -110,11 +110,15 @@ class GradNormBalancer(nn.Module):
     def forward(self, L1, L2, model):
         W = list(model.shared_layer.parameters())
 
-        # Per-task gradient norms; retain_graph keeps L1/L2 graph for main backward
-        g1 = autograd.grad(self.weights[0] * L1, W, create_graph=True, retain_graph=True)
-        g2 = autograd.grad(self.weights[1] * L2, W, create_graph=True, retain_graph=True)
-        G1 = torch.norm(torch.stack([g.norm() for g in g1]))
-        G2 = torch.norm(torch.stack([g.norm() for g in g2]))
+        # Per-task gradient norms computed without create_graph (retain_graph keeps L1/L2 graph for main backward)
+        g1 = autograd.grad(L1, W, retain_graph=True)
+        g2 = autograd.grad(L2, W, retain_graph=True)
+        G1_norm = torch.norm(torch.stack([g.norm() for g in g1]))
+        G2_norm = torch.norm(torch.stack([g.norm() for g in g2]))
+
+        # Multiply by weight variables to create a simple graph containing only self.weights
+        G1 = self.weights[0] * G1_norm
+        G2 = self.weights[1] * G2_norm
 
         # GradNorm targets (detached — treated as constants)
         G_bar = ((G1 + G2) / 2).detach()

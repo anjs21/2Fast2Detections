@@ -34,8 +34,8 @@ if KAGGLE_MODE:
     CHECKPOINTS_DIR = "/kaggle/working/checkpoints"
 else:
     DATA_DIR = "/leonardo_scratch/large/userexternal/jbiebuyc/CV/data"
-    RESULTS_DIR = os.path.join(PROJECT_ROOT, "results_joey_aide")
-    CHECKPOINTS_DIR = os.path.join(PROJECT_ROOT, "checkpoints_joey_aide")
+    RESULTS_DIR = os.path.join(PROJECT_ROOT, "results_joey_aide_gradnorm")
+    CHECKPOINTS_DIR = os.path.join("/leonardo_scratch/large/userexternal/jbiebuyc/CV/checkpoints_joey_aide_gradnorm")
 
 METADATA_TRAIN_VAL_CSV = "/kaggle/working/metadata_train_val.csv" if KAGGLE_MODE else os.path.join(PROJECT_ROOT, "metadata_train_val.csv")
 METADATA_TEST_CSV = "/kaggle/working/metadata_test.csv" if KAGGLE_MODE else os.path.join(PROJECT_ROOT, "metadata_test.csv")
@@ -56,12 +56,12 @@ CONFIG = {
     "backbone": "aide",      # Options: resnet18, resnet50, efficientnet_b0, aide
     "device": "cuda" if torch.cuda.is_available() else "cpu",
     # Differential learning & backbone freezing
-    "freeze_epochs": 3,          # Epochs to keep backbone frozen at start (0 = no freeze)
+    "freeze_epochs": 0,          # Epochs to keep backbone frozen at start (0 = no freeze)
     "backbone_lr": 1e-5,         # LR for backbone after unfreeze
     "head_lr": 1e-4,             # LR for task heads
     # Loss weighting method: "static", "uncertainty", or "gradnorm"
     # Note: "gradnorm" is incompatible with freeze_epochs > 0
-    "loss_weighting_method": "static",
+    "loss_weighting_method": "gradnorm", # options: static, uncertainty, gradnorm
     "gradnorm_alpha": 1.5,       # GradNorm task-asymmetry exponent
     "gradnorm_weight_lr": 1e-3,  # LR for GradNorm task weight optimizer
 }
@@ -110,7 +110,7 @@ def download_train_val_data():
             print("Top level folders in data directory:", os.listdir(DATA_DIR))
         return
 
-    tar_path = os.path.join(PROJECT_ROOT, "train_val.tar.gz")
+    tar_path = os.path.join(DATA_DIR, "train_val.tar.gz")
     if not os.path.exists(tar_path):
         download_url(
             "https://zenodo.org/api/records/14963880/files/RRDataset_original_train_val.tar.gz/content",
@@ -131,7 +131,7 @@ def download_test_data():
     Optimized: skips if already extracted, or downloads to disk first to avoid slow socket streaming.
     """
     test_subset_dir = os.path.join(DATA_DIR, "test_subset")
-    local_tar_path = os.path.join(PROJECT_ROOT, "test_subset.tar.gz")
+    local_tar_path = os.path.join(DATA_DIR, "test_subset.tar.gz")
 
     # 1. Quick Check: Are the files already extracted from a previous run?
     if os.path.exists(test_subset_dir):

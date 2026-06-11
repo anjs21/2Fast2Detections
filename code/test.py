@@ -2,6 +2,9 @@ import torch
 from models import get_backbone
 
 def test_load_aide():
+    print(f"GPU available: {torch.cuda.is_available()}")
+    print(f"Device: {'cuda' if torch.cuda.is_available() else 'cpu'}")
+    
     print("Attempting to load the AIDE backbone...")
     try:
         model, num_features, shared_layer = get_backbone("aide")

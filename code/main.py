@@ -189,11 +189,11 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     # PHASE 7: ABLATION STUDY
     # ------------------------------------------------------------------
-    print("\n" + "=" * 60)
-    print("PHASE 7: ABLATION STUDY (Loss Weight Sweep)")
-    print("=" * 60)
+    # print("\n" + "=" * 60)
+    # print("PHASE 7: ABLATION STUDY (Loss Weight Sweep)")
+    # print("=" * 60)
 
-    ablation_df = run_ablation_study(mt_train_loader, mt_val_loader)
+    # ablation_df = run_ablation_study(mt_train_loader, mt_val_loader)
 
     # ------------------------------------------------------------------
     # PHASE 9: SAVE FINAL RESULTS
