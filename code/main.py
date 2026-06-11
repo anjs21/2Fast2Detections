@@ -9,20 +9,23 @@ Main entry point that orchestrates all stages:
   4. Ablation study (stage_ablation)
   5. Evaluation & save results (stage_test_eval)
 
-Improvements over v1:
-  - Fixed test data leak (separate metadata for train/val vs. test)
-  - Upgraded backbone: ResNet50 (configurable)
-  - Better task heads: Dropout + hidden layer
-  - Richer data augmentation pipeline
-  - Learning rate scheduler (CosineAnnealingLR)
-  - Early stopping + best-model checkpointing
-  - Gradient clipping
-  - Unimodal baseline training for comparison
-  - Ablation study over loss weight configurations
-  - Per-transformation accuracy breakdown
-  - Cross-class transformation trace analysis
-  - Full metrics: F1, precision, recall, confusion matrices
-  - Training curve visualization
+Improvements:
+  - Leak-free splits: "original" honors the dataset's curated train/val folders;
+    "transmitted"/"redigitalized" are split 80/20 from test_subset, disjoint at
+    the image level (see data.build_splits). No image appears in both splits.
+  - DRCT-ConvB: ConvNeXt-Base shared backbone + supervised-contrastive head, with
+    optional Stable Diffusion reconstruction mining real images into hard-fakes
+    (drct_reconstruct.py).
+  - Forensics-aware augmentation: native-pixel crops + JPEG/noise degradations
+    instead of resampling augmentation that erases generation artifacts.
+  - Class-weighted cross-entropy, mixed-precision (AMP) training.
+  - Task heads with Dropout + hidden layer.
+  - LR scheduler (CosineAnnealingLR), early stopping, best-model checkpointing,
+    gradient clipping.
+  - Unimodal baselines, ablation over loss weights, per-transformation breakdown,
+    cross-class trace analysis.
+  - Metrics: F1, precision, recall, confusion matrices, ROC-AUC / AP for binary.
+  - Training-curve visualization.
 """
 
 import os
@@ -32,16 +35,17 @@ import matplotlib
 matplotlib.use('Agg')
 import pandas as pd
 from torch.utils.data import DataLoader
-from sklearn.model_selection import train_test_split
 
 from config import (
     CONFIG, DATA_DIR, METADATA_TRAIN_VAL_CSV, PROJECT_ROOT,
+    ORIGINAL_TRAIN_DIR, ORIGINAL_VAL_DIR, TEST_SUBSET_DIR, DRCT_RECON_DIR,
     download_train_val_data, download_test_data,
 )
 from data import (
-    scan_directory, MultiTaskDataset, SingleTaskDataset,
+    build_splits, MultiTaskDataset, SingleTaskDataset,
     get_train_transform, get_val_transform,
 )
+from drct_reconstruct import build_drct_reconstructions
 from stage_unimodal import run_unimodal_baselines
 from stage_multimodal import run_multimodal_training, run_comparison_and_analysis
 from stage_ablation import run_ablation_study
@@ -62,46 +66,26 @@ if __name__ == "__main__":
     download_train_val_data()
     download_test_data()
 
-    # 1b. Scan DATA_DIR for all categories
-    if os.path.exists(METADATA_TRAIN_VAL_CSV):
-        print(f"Loading existing metadata from {METADATA_TRAIN_VAL_CSV}")
-        df_train_val = pd.read_csv(METADATA_TRAIN_VAL_CSV)
-        
-        # Ensure relative paths in cached metadata are resolved to absolute using PROJECT_ROOT
-        def make_absolute(path):
-            if not os.path.isabs(path):
-                return os.path.abspath(os.path.join(PROJECT_ROOT, path))
-            return path
-        df_train_val["filepath"] = df_train_val["filepath"].apply(make_absolute)
-
-        # Check if the loaded metadata contains all 3 transformation categories
-        available_classes = set(df_train_val["transform_label"].dropna().unique())
-        if len(available_classes.intersection({"original", "transmitted", "redigitalized"})) < 3:
-            print("Cached metadata is incomplete (missing classes). Re-scanning...")
-            df_train_val = scan_directory(DATA_DIR, METADATA_TRAIN_VAL_CSV)
-    else:
-        df_train_val = scan_directory(DATA_DIR, METADATA_TRAIN_VAL_CSV)
-
-    # 1c. Filter out corrupted/unknown
-    df_clean = df_train_val[
-        (df_train_val["is_corrupted"] == False) &
-        (df_train_val["binary_label"] != "unknown") &
-        (df_train_val["transform_label"] != "unknown")
-    ]
-
-    # 1d. Balanced subset
-    balanced_df = pd.concat([
-        grp.sample(min(len(grp), CONFIG["subset_per_class"]), random_state=CONFIG["seed"])
-        for _, grp in df_clean.groupby(["binary_label", "transform_label"])
-    ]).reset_index(drop=True)
-
-    # 1e. Stratified 80/20 split
-    train_df, val_df = train_test_split(
-        balanced_df,
-        test_size=0.2,
-        stratify=balanced_df[["binary_label", "transform_label"]],
-        random_state=CONFIG["seed"],
+    # 1b-1e. Build LEAK-FREE train/val splits:
+    #   - "original": honor the dataset's curated train/ and val/ folders as-is
+    #   - "transmitted"/"redigitalized": 80/20 split of the test_subset images
+    #     (disjoint at image level -> no train/val leak). A balanced per-class cap
+    #     is applied within each split. See data.build_splits.
+    train_df, val_df = build_splits(
+        ORIGINAL_TRAIN_DIR, ORIGINAL_VAL_DIR, TEST_SUBSET_DIR,
+        subset_per_class=CONFIG["subset_per_class"], seed=CONFIG["seed"],
+        csv_path=METADATA_TRAIN_VAL_CSV,
     )
+
+    # 1e-bis. DRCT: mine diffusion-reconstructed "hard fakes" from real TRAIN
+    # images and append them to the training set (optional, GPU+diffusers; see
+    # drct_reconstruct.py). val_df is left untouched so evaluation stays honest.
+    if CONFIG.get("use_drct"):
+        recon_df = build_drct_reconstructions(train_df, CONFIG, DRCT_RECON_DIR)
+        if len(recon_df):
+            keep = [c for c in train_df.columns if c in recon_df.columns]
+            train_df = pd.concat([train_df, recon_df[keep]], ignore_index=True)
+            print(f"Added {len(recon_df)} DRCT hard-fakes -> train size now {len(train_df)}")
 
     print(f"\nTrain subset size: {len(train_df)}")
     print(f"Validation subset size: {len(val_df)}")
@@ -127,26 +111,26 @@ if __name__ == "__main__":
     mt_train_dataset = MultiTaskDataset(train_df, transform=train_tfm)
     mt_val_dataset = MultiTaskDataset(val_df, transform=val_tfm)
     mt_train_loader = DataLoader(mt_train_dataset, batch_size=CONFIG["batch_size"],
-                                 shuffle=True, num_workers=2, pin_memory=True)
+                                 shuffle=True, num_workers=CONFIG["num_workers"], pin_memory=True)
     mt_val_loader = DataLoader(mt_val_dataset, batch_size=CONFIG["batch_size"],
-                                shuffle=False, num_workers=2, pin_memory=True)
+                                shuffle=False, num_workers=CONFIG["num_workers"], pin_memory=True)
 
     # Single-task dataloaders (for unimodal baselines)
     st_bin_train = DataLoader(
         SingleTaskDataset(train_df, "binary", train_tfm),
-        batch_size=CONFIG["batch_size"], shuffle=True, num_workers=2, pin_memory=True
+        batch_size=CONFIG["batch_size"], shuffle=True, num_workers=CONFIG["num_workers"], pin_memory=True
     )
     st_bin_val = DataLoader(
         SingleTaskDataset(val_df, "binary", val_tfm),
-        batch_size=CONFIG["batch_size"], shuffle=False, num_workers=2, pin_memory=True
+        batch_size=CONFIG["batch_size"], shuffle=False, num_workers=CONFIG["num_workers"], pin_memory=True
     )
     st_trans_train = DataLoader(
         SingleTaskDataset(train_df, "transform", train_tfm),
-        batch_size=CONFIG["batch_size"], shuffle=True, num_workers=2, pin_memory=True
+        batch_size=CONFIG["batch_size"], shuffle=True, num_workers=CONFIG["num_workers"], pin_memory=True
     )
     st_trans_val = DataLoader(
         SingleTaskDataset(val_df, "transform", val_tfm),
-        batch_size=CONFIG["batch_size"], shuffle=False, num_workers=2, pin_memory=True
+        batch_size=CONFIG["batch_size"], shuffle=False, num_workers=CONFIG["num_workers"], pin_memory=True
     )
 
     # ------------------------------------------------------------------

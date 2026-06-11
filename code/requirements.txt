@@ -8,3 +8,10 @@ seaborn
 matplotlib
 tqdm
 Pillow
+
+# Optional: only needed for the DRCT Stable Diffusion reconstruction step
+# (drct_reconstruct.py). The pipeline runs without these — it just skips the
+# diffusion-reconstructed hard-fakes and trains with the contrastive loss alone.
+diffusers
+transformers
+accelerate

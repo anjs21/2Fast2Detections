@@ -34,6 +34,18 @@ METADATA_TEST_CSV = "/kaggle/working/metadata_test.csv" if KAGGLE_MODE else os.p
 RESULTS_DIR = "/kaggle/working/results" if KAGGLE_MODE else os.path.join(PROJECT_ROOT, "results")
 CHECKPOINTS_DIR = "/kaggle/working/checkpoints" if KAGGLE_MODE else os.path.join(PROJECT_ROOT, "checkpoints")
 
+# Source roots for the leak-free split (see data.build_splits):
+#   - "original" images come WITH a predefined train/val split (honored as-is)
+#   - "transmitted"/"redigitalized" images live only in the test_subset tarball
+#     and are split 80/20 into train/val at the image level (disjoint -> no leak)
+ORIGINAL_ROOT = os.path.join(DATA_DIR, "RRDataset_original_train_val")
+ORIGINAL_TRAIN_DIR = os.path.join(ORIGINAL_ROOT, "train")
+ORIGINAL_VAL_DIR = os.path.join(ORIGINAL_ROOT, "val")
+TEST_SUBSET_DIR = os.path.join(DATA_DIR, "test_subset")
+
+# DRCT diffusion-reconstructed "hard fake" images are written here (offline step)
+DRCT_RECON_DIR = os.path.join(DATA_DIR, "drct_recon")
+
 os.makedirs(RESULTS_DIR, exist_ok=True)
 os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
 
@@ -47,8 +59,19 @@ CONFIG = {
     "subset_per_class": 1000,
     "patience": 3,               # Early stopping patience
     "grad_clip_norm": 1.0,       # Gradient clipping max norm
-    "backbone": "resnet18",      # Options: resnet18, resnet50, efficientnet_b0
+    "backbone": "convnext_base", # DRCT-ConvB backbone. Options: convnext_base, convnext_tiny, resnet50, resnet18, efficientnet_b0
+    "num_workers": 4,
+    "amp": True,                 # Mixed-precision training (no-op on CPU)
     "device": "cuda" if torch.cuda.is_available() else "cpu",
+
+    # ---- DRCT (Diffusion Reconstruction Contrastive Training) ----
+    "use_drct": True,            # Enable supervised-contrastive head + reconstructed hard-fakes
+    "contrastive_weight": 0.2,   # Lambda on the SupCon loss added to the joint CE loss
+    "contrastive_temp": 0.1,     # SupCon temperature
+    "drct_reconstruct": True,    # Run the offline SD reconstruction step (needs diffusers + GPU)
+    "drct_sd_model": "stabilityai/stable-diffusion-2-1-base",
+    "drct_recon_strength": 0.2,  # img2img noising strength for reconstructions (low = near-copy)
+    "drct_recon_per_class": 500, # How many real train images to reconstruct as hard-fakes
 }
 
 # Silence warnings for clean console output

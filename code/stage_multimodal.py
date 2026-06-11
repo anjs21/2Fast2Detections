@@ -44,7 +44,8 @@ def run_multimodal_training(mt_train_loader, mt_val_loader, val_df, val_tfm):
     results = collect_multitask_predictions(model_mt, mt_val_loader, CONFIG["device"])
 
     full_classification_report(results["preds_bin"], results["labels_bin"],
-                               ["Real", "Fake"], "Multi-Task Real/Fake")
+                               ["Real", "Fake"], "Multi-Task Real/Fake",
+                               probs=results["probs_bin"])
     full_classification_report(results["preds_trans"], results["labels_trans"],
                                ["Original", "Transmitted", "Redigitalized"],
                                "Multi-Task Transformation")

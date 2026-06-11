@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, average_precision_score
 from PIL import Image
 
 from config import (
@@ -67,10 +67,24 @@ def collect_singletask_predictions(model, loader, device):
 # =============================================================================
 # Classification Reports & Confusion Matrices
 # =============================================================================
-def full_classification_report(preds, labels, class_names, task_title):
-    """Print a full classification report with confusion matrix."""
+def full_classification_report(preds, labels, class_names, task_title, probs=None):
+    """Print a full classification report with confusion matrix.
+
+    If `probs` (softmax outputs) is given for a binary task, also reports ROC-AUC
+    and average precision — the standard detection metrics in the AI-gen
+    detection literature (e.g. the RRBench benchmark)."""
     print(f"\n{'='*25} {task_title} {'='*25}")
     print(classification_report(labels, preds, target_names=class_names, digits=4))
+
+    if probs is not None and len(class_names) == 2:
+        probs = np.asarray(probs)
+        scores = probs[:, 1] if probs.ndim == 2 else probs  # P(fake)
+        try:
+            auc = roc_auc_score(labels, scores)
+            ap = average_precision_score(labels, scores)
+            print(f"  ROC-AUC: {auc:.4f} | Average Precision: {ap:.4f}")
+        except ValueError as e:
+            print(f"  (AUC unavailable: {e})")
 
     cm = confusion_matrix(labels, preds)
     fig, ax = plt.subplots(figsize=(6, 5))
@@ -95,6 +109,12 @@ def per_transformation_breakdown(results, val_df):
     Break down real/fake detection accuracy separately for each
     transformation category (original, transmitted, redigitalized).
     Also check whether the pattern differs between real and AI-generated images.
+
+    NOTE: the brief asks for a breakdown by "each re-digitization method"
+    (scan / printout-photo / screen-photo / projection). The extracted
+    test_subset filenames encode only the scenario (e.g. "redigital_normal_..."),
+    not the re-digitization method, so a per-method split is not possible with
+    this subset — the breakdown is at the transform-category level.
     """
     val_df_reset = val_df.reset_index(drop=True)
 
