@@ -373,7 +373,7 @@ def get_val_transform(img_size):
     """
     return transforms.Compose([
         ResizeIfSmaller(img_size), 
-        transforms.RandomCrop(img_size),
+        transforms.CenterCrop(img_size),
         transforms.ToTensor(),
         transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
     ])
