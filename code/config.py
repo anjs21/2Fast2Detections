@@ -28,18 +28,24 @@ if torch.cuda.is_available():
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 KAGGLE_MODE = os.path.exists("/kaggle")
-DATA_DIR = "/kaggle/working/data" if KAGGLE_MODE else os.path.join(PROJECT_ROOT, "data")
+if KAGGLE_MODE:
+    DATA_DIR = "/kaggle/working/data"
+    RESULTS_DIR = "/kaggle/working/results"
+    CHECKPOINTS_DIR = "/kaggle/working/checkpoints"
+else:
+    DATA_DIR = "/leonardo_scratch/large/userexternal/jbiebuyc/CV/data"
+    RESULTS_DIR = os.path.join(PROJECT_ROOT, "results_joey_aide")
+    CHECKPOINTS_DIR = os.path.join(PROJECT_ROOT, "checkpoints_joey_aide")
+
 METADATA_TRAIN_VAL_CSV = "/kaggle/working/metadata_train_val.csv" if KAGGLE_MODE else os.path.join(PROJECT_ROOT, "metadata_train_val.csv")
 METADATA_TEST_CSV = "/kaggle/working/metadata_test.csv" if KAGGLE_MODE else os.path.join(PROJECT_ROOT, "metadata_test.csv")
-RESULTS_DIR = "/kaggle/working/results" if KAGGLE_MODE else os.path.join(PROJECT_ROOT, "results_joey")
-CHECKPOINTS_DIR = "/kaggle/working/checkpoints" if KAGGLE_MODE else os.path.join(PROJECT_ROOT, "checkpoints_joey")
 
 os.makedirs(RESULTS_DIR, exist_ok=True)
 os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
 
 CONFIG = {
     "seed": 42,
-    "img_size": 256,
+    "img_size": 224,
     "batch_size": 32,
     "epochs": 10,
     "lr": 1e-4,
@@ -47,7 +53,7 @@ CONFIG = {
     "subset_per_class": 1000,
     "patience": 3,               # Early stopping patience
     "grad_clip_norm": 1.0,       # Gradient clipping max norm
-    "backbone": "resnet18",      # Options: resnet18, resnet50, efficientnet_b0
+    "backbone": "aide",      # Options: resnet18, resnet50, efficientnet_b0, aide
     "device": "cuda" if torch.cuda.is_available() else "cpu",
     # Differential learning & backbone freezing
     "freeze_epochs": 3,          # Epochs to keep backbone frozen at start (0 = no freeze)
