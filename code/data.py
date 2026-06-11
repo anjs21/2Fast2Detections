@@ -42,35 +42,36 @@ def assign_labels(parts):
 
 def scan_directory(root_path, csv_path):
     """Scan a directory for images and produce a metadata CSV."""
-    root = Path(root_path)
-    rows = []
+    # root = Path(root_path)
+    # rows = []
 
-    all_paths = list(root.rglob("*"))
-    print(f"Scanning {root_path} ({len(all_paths)} items)...")
+    # all_paths = list(root.rglob("*"))
+    # print(f"Scanning {root_path} ({len(all_paths)} items)...")
 
-    for img_path in tqdm(all_paths):
-        if img_path.suffix.lower() not in IMAGE_EXTS:
-            continue
+    # for img_path in tqdm(all_paths):
+    #     if img_path.suffix.lower() not in IMAGE_EXTS:
+    #         continue
+    
 
-        parts = [p.lower() for p in img_path.relative_to(root).parts]
-        binary_label, transform_label = assign_labels(parts)
+    parts = [p.lower() for p in img_path.relative_to(root).parts]
+    binary_label, transform_label = assign_labels(parts)
 
-        try:
-            with Image.open(img_path) as img:
-                width, height = img.size
-                is_corrupted = False
-        except Exception:
-            width, height = None, None
-            is_corrupted = True
+    try:
+        with Image.open(img_path) as img:
+            width, height = img.size
+            is_corrupted = False
+    except Exception:
+        width, height = None, None
+        is_corrupted = True
 
-        rows.append({
-            "filepath": str(img_path),
-            "binary_label": binary_label,
-            "transform_label": transform_label,
-            "width": width,
-            "height": height,
-            "is_corrupted": is_corrupted,
-        })
+    rows.append({
+        "filepath": str(img_path),
+        "binary_label": binary_label,
+        "transform_label": transform_label,
+        "width": width,
+        "height": height,
+        "is_corrupted": is_corrupted,
+    })
 
     df = pd.DataFrame(rows)
     df.to_csv(csv_path, index=False)
@@ -143,7 +144,7 @@ class SingleTaskDataset(Dataset):
 def get_train_transform(img_size):
     """Strong training augmentation pipeline."""
     return transforms.Compose([
-        transforms.Resize((img_size, img_size)),
+        # transforms.Resize((img_size, img_size)),
         transforms.RandomResizedCrop(img_size, scale=(0.8, 1.0)),
         transforms.RandomHorizontalFlip(),
         transforms.RandomVerticalFlip(p=0.1),
