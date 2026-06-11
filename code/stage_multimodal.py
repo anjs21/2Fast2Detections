@@ -19,15 +19,17 @@ from evaluation import (
 )
 
 
-def run_multimodal_training(mt_train_loader, mt_val_loader, val_df, val_tfm):
+def run_multimodal_training(mt_train_loader, mt_val_loader, mt_test_loader, test_df, val_tfm):
     """
     Train and evaluate the multi-task joint model.
 
+    Fit on train, early-stop/select on val, and report on the held-out test set.
+
     Returns:
         model_mt: Trained multi-task model
-        results: Prediction results dict
-        multitask_bin_acc: Validation binary accuracy
-        multitask_trans_acc: Validation transform accuracy
+        results: Prediction results dict (on TEST)
+        multitask_bin_acc: Test binary accuracy
+        multitask_trans_acc: Test transform accuracy
     """
     print("\n" + "=" * 60)
     print("PHASE 3: MULTI-TASK JOINT TRAINING")
@@ -43,15 +45,15 @@ def run_multimodal_training(mt_train_loader, mt_val_loader, val_df, val_tfm):
     plot_training_curves(logger_mt, "Multi-Task Joint Training (w1=0.5, w2=0.5)",
                          "curves_multitask.png")
 
-    # Full evaluation
-    results = collect_multitask_predictions(model_mt, mt_val_loader, CONFIG["device"])
+    # Final evaluation on the held-out TEST set
+    results = collect_multitask_predictions(model_mt, mt_test_loader, CONFIG["device"])
 
     full_classification_report(results["preds_bin"], results["labels_bin"],
-                               ["Real", "Fake"], "Multi-Task Real/Fake",
+                               ["Real", "Fake"], "Multi-Task Real/Fake (TEST)",
                                probs=results["probs_bin"])
     full_classification_report(results["preds_trans"], results["labels_trans"],
                                ["Original", "Transmitted", "Redigitalized"],
-                               "Multi-Task Transformation")
+                               "Multi-Task Transformation (TEST)")
 
     multitask_bin_acc = (results["preds_bin"] == results["labels_bin"]).mean()
     multitask_trans_acc = (results["preds_trans"] == results["labels_trans"]).mean()
@@ -59,12 +61,12 @@ def run_multimodal_training(mt_train_loader, mt_val_loader, val_df, val_tfm):
     return model_mt, results, multitask_bin_acc, multitask_trans_acc
 
 
-def run_comparison_and_analysis(results, val_df, val_tfm, model_mt,
+def run_comparison_and_analysis(results, test_df, val_tfm, model_mt,
                                  unimodal_bin_acc, unimodal_trans_acc,
                                  multitask_bin_acc, multitask_trans_acc):
     """
     Run unimodal vs multi-task comparison, per-transformation breakdown,
-    cross-class analysis, and visual inference.
+    cross-class analysis, and visual inference — all on the held-out test set.
     """
     # ---- Comparison ----
     print("\n" + "=" * 60)
@@ -81,7 +83,7 @@ def run_comparison_and_analysis(results, val_df, val_tfm, model_mt,
     print("PHASE 5: PER-TRANSFORMATION ACCURACY BREAKDOWN")
     print("=" * 60)
 
-    breakdown_df = per_transformation_breakdown(results, val_df)
+    breakdown_df = per_transformation_breakdown(results, test_df)
 
     # ---- Cross-Class Trace Analysis ----
     print("\n" + "=" * 60)
@@ -95,6 +97,6 @@ def run_comparison_and_analysis(results, val_df, val_tfm, model_mt,
     print("PHASE 8: VISUAL INFERENCE")
     print("=" * 60)
 
-    run_visual_inference(model_mt, val_df, val_tfm, CONFIG["device"], num_samples=6)
+    run_visual_inference(model_mt, test_df, val_tfm, CONFIG["device"], num_samples=6)
 
     return comparison_df, breakdown_df, trace_df

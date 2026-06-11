@@ -36,13 +36,15 @@ def save_results(model_mt, start_time,
     print("PHASE 9: SAVING RESULTS")
     print("=" * 60)
 
-    # Save all results to a JSON summary
+    # Save all results to a JSON summary. All headline accuracies are measured on
+    # the held-out TEST split (val is used only for early stopping / selection).
     final_summary = {
         "config": {k: str(v) for k, v in CONFIG.items()},
-        "unimodal_binary_acc": float(unimodal_bin_acc),
-        "unimodal_transform_acc": float(unimodal_trans_acc),
-        "multitask_binary_acc": float(multitask_bin_acc),
-        "multitask_transform_acc": float(multitask_trans_acc),
+        "evaluation_split": "test",
+        "unimodal_binary_test_acc": float(unimodal_bin_acc),
+        "unimodal_transform_test_acc": float(unimodal_trans_acc),
+        "multitask_binary_test_acc": float(multitask_bin_acc),
+        "multitask_transform_test_acc": float(multitask_trans_acc),
         "ablation_results": ablation_df.to_dict(orient="records") if ablation_df is not None else [],
         "per_transformation_breakdown": breakdown_df.to_dict(orient="records"),
         "cross_class_traces": trace_df.to_dict(orient="records"),

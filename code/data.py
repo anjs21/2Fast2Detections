@@ -3,16 +3,32 @@ Dataset classes, transforms, and metadata scanning utilities.
 """
 
 import io
+import os
+import re
 import torch
+import numpy as np
 from torch.utils.data import Dataset
 from torchvision import transforms
 from PIL import Image
 from pathlib import Path
 from tqdm import tqdm
 import pandas as pd
-from sklearn.model_selection import train_test_split
 
 from config import IMAGE_EXTS, BINARY_MAP, TRANSFORM_MAP
+
+
+def source_identity(filepath):
+    """Return the source-scene identity of an image, independent of transform.
+
+    The dataset applies multiple post-processing transforms to the same source
+    scene, encoding the transform as a filename prefix (e.g. ``transfer_`` /
+    ``redigital_``). Stripping that prefix (and the extension) yields a key that
+    is shared across an image's original / transmitted / redigitalized versions,
+    so a group-aware split can keep all versions of a scene in the same split.
+    """
+    base = os.path.splitext(os.path.basename(filepath))[0].lower()
+    base = re.sub(r"^(transfer_|redigital_|redigital|transfer)", "", base)
+    return base
 
 
 # =============================================================================
@@ -127,62 +143,97 @@ def _scan_root(root_path, transform_override=None):
     return df
 
 
-def build_splits(original_train_dir, original_val_dir, test_subset_dir,
-                 subset_per_class, seed, csv_path=None):
-    """Construct leak-free train/val splits.
+def _assign_group_splits(df, val_frac, test_frac, seed):
+    """Group-aware, stratified train/val/test assignment at the SOURCE-SCENE level.
 
-    - "original" images carry a curated train/val split (folders) -> honored as-is.
-    - "transmitted"/"redigitalized" images live only in the test_subset tarball;
-      they are split 80/20 into train/val at the IMAGE level (disjoint -> no leak),
-      stratified by (binary_label, transform_label).
-
-    Each row gets a `split` column ("train"/"val"). A balanced per-class cap is
-    applied independently within each split. Returns (train_df, val_df).
+    Every image of a given `ident` (source scene, across all its transforms) is
+    assigned to the same split, so no scene content leaks across splits. Splitting
+    is done independently within each (binary_label, primary transform) stratum to
+    keep the real/fake and transform proportions balanced across all three splits.
     """
-    print("\n--- Building leak-free splits ---")
+    # One row per identity: its binary label and its dominant transform.
+    idf = (df.groupby("ident")
+             .agg(binary_label=("binary_label", "first"),
+                  transform_label=("transform_label",
+                                   lambda s: s.value_counts().index[0]))
+             .reset_index())
+
+    rng = np.random.RandomState(seed)
+    ident_to_split = {}
+    for _, stratum in idf.groupby(["binary_label", "transform_label"]):
+        ids = stratum["ident"].to_numpy().copy()
+        rng.shuffle(ids)
+        n = len(ids)
+        n_test = int(round(n * test_frac))
+        n_val = int(round(n * val_frac))
+        for i in ids[:n_test]:
+            ident_to_split[i] = "test"
+        for i in ids[n_test:n_test + n_val]:
+            ident_to_split[i] = "val"
+        for i in ids[n_test + n_val:]:
+            ident_to_split[i] = "train"
+
+    out = df.copy()
+    out["split"] = out["ident"].map(ident_to_split)
+    return out
+
+
+def build_splits(original_train_dir, original_val_dir, test_subset_dir,
+                 subset_per_class, seed, val_frac=0.15, test_frac=0.15, csv_path=None):
+    """Construct a group-aware, leak-free train/val/test split.
+
+    All labelled images (original + transmitted + redigitalized) are pooled, a
+    source-scene `ident` is computed for each, and identities are split into
+    train/val/test so that every transform version of a scene stays in one split
+    (no cross-transform content leakage). The split is stratified by
+    (binary_label, primary transform). A balanced per-class cap is then applied
+    within each split. Returns (train_df, val_df, test_df).
+    """
+    print("\n--- Building group-aware train/val/test splits ---")
     orig_train = _scan_root(original_train_dir, transform_override="original")
     orig_val = _scan_root(original_val_dir, transform_override="original")
-    print(f"  original: {len(orig_train)} train / {len(orig_val)} val")
+    originals = pd.concat([orig_train, orig_val], ignore_index=True)
+    print(f"  original: {len(originals)} images")
 
     other = _scan_root(test_subset_dir)
     other = other[other["transform_label"].isin(["transmitted", "redigitalized"])].reset_index(drop=True)
     print(f"  transmitted+redigitalized (test_subset): {len(other)} images")
 
-    if len(other):
-        other_train, other_val = train_test_split(
-            other, test_size=0.2,
-            stratify=other[["binary_label", "transform_label"]],
-            random_state=seed,
-        )
-    else:
-        other_train = other_val = other
+    pool = pd.concat([originals, other], ignore_index=True)
+    pool["ident"] = pool["filepath"].map(source_identity)
 
-    orig_train["split"] = "train"
-    orig_val["split"] = "val"
-    other_train = other_train.assign(split="train")
-    other_val = other_val.assign(split="val")
+    pool = _assign_group_splits(pool, val_frac=val_frac, test_frac=test_frac, seed=seed)
 
-    train_df = pd.concat([orig_train, other_train], ignore_index=True)
-    val_df = pd.concat([orig_val, other_val], ignore_index=True)
-
-    # Balanced per-class cap within each split
+    # Balanced per-class cap within each split.
     def _balance(df):
+        if not len(df):
+            return df
         return pd.concat([
             grp.sample(min(len(grp), subset_per_class), random_state=seed)
             for _, grp in df.groupby(["binary_label", "transform_label"])
         ]).reset_index(drop=True)
 
-    train_df = _balance(train_df)
-    val_df = _balance(val_df)
+    train_df = _balance(pool[pool["split"] == "train"])
+    val_df = _balance(pool[pool["split"] == "val"])
+    test_df = _balance(pool[pool["split"] == "test"])
 
-    # Sanity: no filepath appears in both splits (true disjointness)
-    overlap = set(train_df["filepath"]) & set(val_df["filepath"])
-    assert not overlap, f"LEAK: {len(overlap)} files in both train and val!"
+    # Sanity 1: no file in two splits.
+    paths = [set(d["filepath"]) for d in (train_df, val_df, test_df)]
+    assert not (paths[0] & paths[1] | paths[0] & paths[2] | paths[1] & paths[2]), \
+        "LEAK: a file appears in more than one split!"
+    # Sanity 2: no source identity in two splits (group-aware guarantee).
+    ids = [set(d["ident"]) for d in (train_df, val_df, test_df)]
+    assert not (ids[0] & ids[1] | ids[0] & ids[2] | ids[1] & ids[2]), \
+        "LEAK: a source identity appears in more than one split!"
+
+    print(f"  -> train {len(train_df)} | val {len(val_df)} | test {len(test_df)} images")
 
     if csv_path is not None:
-        pd.concat([train_df, val_df], ignore_index=True).to_csv(csv_path, index=False)
+        pd.concat([train_df, val_df, test_df], ignore_index=True).to_csv(csv_path, index=False)
 
-    return train_df.reset_index(drop=True), val_df.reset_index(drop=True)
+    return (train_df.reset_index(drop=True),
+            val_df.reset_index(drop=True),
+            test_df.reset_index(drop=True))
 
 
 # =============================================================================
@@ -307,9 +358,9 @@ def get_train_transform(img_size):
         ResizeIfSmaller(img_size),
         transforms.RandomCrop(img_size),
         transforms.RandomHorizontalFlip(),
-        RandomJPEG(p=0.5, quality_range=(50, 95)),
+        # RandomJPEG(p=0.5, quality_range=(50, 95)),
         transforms.ToTensor(),
-        GaussianNoise(p=0.3, std=0.02),
+        # GaussianNoise(p=0.3, std=0.02),
         transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
     ])
 
@@ -321,8 +372,8 @@ def get_val_transform(img_size):
     resizes the shorter side, then center-crops, minimizing resampling.
     """
     return transforms.Compose([
-        transforms.Resize(int(img_size * 1.14)),  # shorter side -> ~256 for 224
-        transforms.CenterCrop(img_size),
+        ResizeIfSmaller(img_size), 
+        transforms.RandomCrop(img_size),
         transforms.ToTensor(),
         transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
     ])

@@ -10,9 +10,10 @@ Main entry point that orchestrates all stages:
   5. Evaluation & save results (stage_test_eval)
 
 Improvements:
-  - Leak-free splits: "original" honors the dataset's curated train/val folders;
-    "transmitted"/"redigitalized" are split 80/20 from test_subset, disjoint at
-    the image level (see data.build_splits). No image appears in both splits.
+  - Group-aware, leak-free train/val/test splits: all images are pooled and split
+    by SOURCE SCENE identity (transform-independent), so no scene's transform
+    versions cross splits (see data.build_splits). val = selection/early stopping;
+    test = final held-out evaluation.
   - Shared ResNet50 backbone with two task heads, partially fine-tuned (early
     backbone stages frozen; see models.apply_partial_finetune).
   - Forensics-aware augmentation: native-pixel crops + JPEG/noise degradations
@@ -66,19 +67,22 @@ if __name__ == "__main__":
     download_train_val_data()
     download_test_data()
 
-    # 1b-1e. Build LEAK-FREE train/val splits:
-    #   - "original": honor the dataset's curated train/ and val/ folders as-is
-    #   - "transmitted"/"redigitalized": 80/20 split of the test_subset images
-    #     (disjoint at image level -> no train/val leak). A balanced per-class cap
-    #     is applied within each split. See data.build_splits.
-    train_df, val_df = build_splits(
+    # 1b-1e. Build GROUP-AWARE, leak-free train/val/test splits:
+    #   All labelled images are pooled, a source-scene identity is computed for
+    #   each (transform-independent), and identities are split into train/val/test
+    #   so every transform version of a scene stays in one split (no content leak).
+    #   Stratified by (binary, transform); balanced per-class cap within each split.
+    #   val = model selection / early stopping; test = final held-out evaluation.
+    train_df, val_df, test_df = build_splits(
         ORIGINAL_TRAIN_DIR, ORIGINAL_VAL_DIR, TEST_SUBSET_DIR,
         subset_per_class=CONFIG["subset_per_class"], seed=CONFIG["seed"],
+        val_frac=CONFIG["val_frac"], test_frac=CONFIG["test_frac"],
         csv_path=METADATA_TRAIN_VAL_CSV,
     )
 
     print(f"\nTrain subset size: {len(train_df)}")
     print(f"Validation subset size: {len(val_df)}")
+    print(f"Test subset size: {len(test_df)}")
     print("\nTraining balance matrix:")
     print(pd.crosstab(train_df["transform_label"], train_df["binary_label"]))
 
@@ -91,57 +95,50 @@ if __name__ == "__main__":
     print(f"Subset per class: {CONFIG['subset_per_class']}")
     print(f"Total training images: {len(train_df)}")
     print(f"Total validation images: {len(val_df)}")
+    print(f"Total test images: {len(test_df)}")
     print(f"Backbone: {CONFIG['backbone']}")
 
     # 1g. Create DataLoaders
     train_tfm = get_train_transform(CONFIG["img_size"])
     val_tfm = get_val_transform(CONFIG["img_size"])
 
+    def _loader(dataset, shuffle):
+        return DataLoader(dataset, batch_size=CONFIG["batch_size"], shuffle=shuffle,
+                          num_workers=CONFIG["num_workers"], pin_memory=True)
+
     # Multi-task dataloaders
-    mt_train_dataset = MultiTaskDataset(train_df, transform=train_tfm)
-    mt_val_dataset = MultiTaskDataset(val_df, transform=val_tfm)
-    mt_train_loader = DataLoader(mt_train_dataset, batch_size=CONFIG["batch_size"],
-                                 shuffle=True, num_workers=CONFIG["num_workers"], pin_memory=True)
-    mt_val_loader = DataLoader(mt_val_dataset, batch_size=CONFIG["batch_size"],
-                                shuffle=False, num_workers=CONFIG["num_workers"], pin_memory=True)
+    mt_train_loader = _loader(MultiTaskDataset(train_df, transform=train_tfm), True)
+    mt_val_loader = _loader(MultiTaskDataset(val_df, transform=val_tfm), False)
+    mt_test_loader = _loader(MultiTaskDataset(test_df, transform=val_tfm), False)
 
     # Single-task dataloaders (for unimodal baselines)
-    st_bin_train = DataLoader(
-        SingleTaskDataset(train_df, "binary", train_tfm),
-        batch_size=CONFIG["batch_size"], shuffle=True, num_workers=CONFIG["num_workers"], pin_memory=True
-    )
-    st_bin_val = DataLoader(
-        SingleTaskDataset(val_df, "binary", val_tfm),
-        batch_size=CONFIG["batch_size"], shuffle=False, num_workers=CONFIG["num_workers"], pin_memory=True
-    )
-    st_trans_train = DataLoader(
-        SingleTaskDataset(train_df, "transform", train_tfm),
-        batch_size=CONFIG["batch_size"], shuffle=True, num_workers=CONFIG["num_workers"], pin_memory=True
-    )
-    st_trans_val = DataLoader(
-        SingleTaskDataset(val_df, "transform", val_tfm),
-        batch_size=CONFIG["batch_size"], shuffle=False, num_workers=CONFIG["num_workers"], pin_memory=True
-    )
+    st_bin_train = _loader(SingleTaskDataset(train_df, "binary", train_tfm), True)
+    st_bin_val = _loader(SingleTaskDataset(val_df, "binary", val_tfm), False)
+    st_bin_test = _loader(SingleTaskDataset(test_df, "binary", val_tfm), False)
+    st_trans_train = _loader(SingleTaskDataset(train_df, "transform", train_tfm), True)
+    st_trans_val = _loader(SingleTaskDataset(val_df, "transform", val_tfm), False)
+    st_trans_test = _loader(SingleTaskDataset(test_df, "transform", val_tfm), False)
 
     # ------------------------------------------------------------------
-    # PHASE 2: UNIMODAL BASELINES
+    # PHASE 2: UNIMODAL BASELINES  (fit on train, early-stop on val, report on test)
     # ------------------------------------------------------------------
     unimodal_bin_acc, unimodal_trans_acc = run_unimodal_baselines(
-        st_bin_train, st_bin_val, st_trans_train, st_trans_val
+        st_bin_train, st_bin_val, st_bin_test,
+        st_trans_train, st_trans_val, st_trans_test
     )
 
     # ------------------------------------------------------------------
-    # PHASE 3: MULTI-TASK JOINT TRAINING
+    # PHASE 3: MULTI-TASK JOINT TRAINING  (early-stop on val, report on test)
     # ------------------------------------------------------------------
     model_mt, results, multitask_bin_acc, multitask_trans_acc = run_multimodal_training(
-        mt_train_loader, mt_val_loader, val_df, val_tfm
+        mt_train_loader, mt_val_loader, mt_test_loader, test_df, val_tfm
     )
 
     # ------------------------------------------------------------------
-    # PHASES 4-6, 8: COMPARISON, ANALYSIS, VISUAL INFERENCE
+    # PHASES 4-6, 8: COMPARISON, ANALYSIS, VISUAL INFERENCE  (on held-out test)
     # ------------------------------------------------------------------
     comparison_df, breakdown_df, trace_df = run_comparison_and_analysis(
-        results, val_df, val_tfm, model_mt,
+        results, test_df, val_tfm, model_mt,
         unimodal_bin_acc, unimodal_trans_acc,
         multitask_bin_acc, multitask_trans_acc
     )

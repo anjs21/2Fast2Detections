@@ -54,6 +54,8 @@ CONFIG = {
     "lr": 1e-4,
     "weight_decay": 1e-4,
     "subset_per_class": 1000,
+    "val_frac": 0.15,            # Group-aware split: fraction of source scenes held out for val
+    "test_frac": 0.15,           # Group-aware split: fraction of source scenes held out for test
     "patience": 3,               # Early stopping patience
     "grad_clip_norm": 1.0,       # Gradient clipping max norm
     "backbone": "resnet50",      # Shared backbone. Options: resnet50, resnet18, efficientnet_b0, convnext_tiny, convnext_base
@@ -66,7 +68,7 @@ CONFIG = {
     # is frozen and the two task heads are always trainable. For ResNet50 the
     # stages are layer1..layer4, so 2 => train layer3 + layer4 + heads.
     # Set to None for full fine-tuning, or 0 for a frozen-backbone linear probe.
-    "trainable_backbone_stages": 2,
+    "trainable_backbone_stages": None,
 }
 
 # Silence warnings for clean console output
