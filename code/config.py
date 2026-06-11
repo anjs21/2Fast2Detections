@@ -66,11 +66,13 @@ CONFIG = {
 
     # ---- DRCT (Diffusion Reconstruction Contrastive Training) ----
     "use_drct": True,            # Enable supervised-contrastive head + reconstructed hard-fakes
-    "contrastive_weight": 0.2,   # Lambda on the SupCon loss added to the joint CE loss
+    "contrastive_weight": 0.05,   # Lambda on the SupCon loss added to the joint CE loss
     "contrastive_temp": 0.1,     # SupCon temperature
     "drct_reconstruct": True,    # Run the offline SD reconstruction step (needs diffusers + GPU)
-    "drct_sd_model": "stabilityai/stable-diffusion-2-1-base",
-    "drct_recon_strength": 0.2,  # img2img noising strength for reconstructions (low = near-copy)
+    # sd-turbo is SD 2.1 distilled by Stability AI: ungated (the gated 2-1-base is
+    # deprecated/inaccessible), same StableDiffusionImg2ImgPipeline, far fewer steps.
+    "drct_sd_model": "stabilityai/sd-turbo",
+    "drct_recon_strength": 0.5,  # img2img noising strength for reconstructions (low = near-copy)
     "drct_recon_per_class": 500, # How many real train images to reconstruct as hard-fakes
 }
 

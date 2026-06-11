@@ -1,0 +1,89 @@
+=============================================
+Job started at: Thu Jun 11 21:17:18 CEST 2026
+Running on node: 
+Current directory: /leonardo/home/userexternal/asathyan/2Fast2Detections/code
+Python location: /leonardo/home/userexternal/asathyan/.cvenv/bin/python
+Allocated GPU Info:
+Thu Jun 11 21:17:18 2026       
++---------------------------------------------------------------------------------------+
+| NVIDIA-SMI 535.274.02             Driver Version: 535.274.02   CUDA Version: 12.2     |
+|-----------------------------------------+----------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |         Memory-Usage | GPU-Util  Compute M. |
+|                                         |                      |               MIG M. |
+|=========================================+======================+======================|
+|   0  NVIDIA A100-SXM-64GB           On  | 00000000:8F:00.0 Off |                    0 |
+| N/A   43C    P0              64W / 462W |      0MiB / 65536MiB |      0%      Default |
+|                                         |                      |             Disabled |
++-----------------------------------------+----------------------+----------------------+
+                                                                                         
++---------------------------------------------------------------------------------------+
+| Processes:                                                                            |
+|  GPU   GI   CI        PID   Type   Process name                            GPU Memory |
+|        ID   ID                                                             Usage      |
+|=======================================================================================|
+|  No running processes found                                                           |
++---------------------------------------------------------------------------------------+
+=============================================
+Thu Jun 11 21:17:21 2026       
++---------------------------------------------------------------------------------------+
+| NVIDIA-SMI 535.274.02             Driver Version: 535.274.02   CUDA Version: 12.2     |
+|-----------------------------------------+----------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |         Memory-Usage | GPU-Util  Compute M. |
+|                                         |                      |               MIG M. |
+|=========================================+======================+======================|
+|   0  NVIDIA A100-SXM-64GB           On  | 00000000:8F:00.0 Off |                    0 |
+| N/A   43C    P0              64W / 462W |      4MiB / 65536MiB |      0%      Default |
+|                                         |                      |             Disabled |
++-----------------------------------------+----------------------+----------------------+
+                                                                                         
++---------------------------------------------------------------------------------------+
+| Processes:                                                                            |
+|  GPU   GI   CI        PID   Type   Process name                            GPU Memory |
+|        ID   ID                                                             Usage      |
+|=======================================================================================|
+|  No running processes found                                                           |
++---------------------------------------------------------------------------------------+
+GPU available: True
+Device: cuda
+
+============================================================
+PHASE 1: DATA PREPARATION
+============================================================
+Train/val data is already present in '/leonardo/home/userexternal/asathyan/2Fast2Detections/data/RRDataset_original_train_val'. Skipping download!
+Top level folders in data directory: ['test_subset', 'drct_recon', 'RRDataset_original_train_val']
+Test subset is already extracted (4000 images found). Skipping download!
+
+--- Building leak-free splits ---
+  original: 2500 train / 500 val
+  transmitted+redigitalized (test_subset): 4000 images
+[DRCT] Reusing 45 existing reconstructions in /leonardo/home/userexternal/asathyan/2Fast2Detections/data/drct_recon
+Added 45 DRCT hard-fakes -> train size now 5245
+
+Train subset size: 5245
+Validation subset size: 1300
+
+Training balance matrix:
+binary_label     fake  real
+transform_label            
+original         1045  1000
+redigitalized     725   800
+transmitted       875   800
+
+--- Hardware & Subset Documentation ---
+Device: cuda
+GPU: NVIDIA A100-SXM-64GB
+GPU Memory: 68.1 GB
+Subset per class: 1000
+Total training images: 5245
+Total validation images: 1300
+Backbone: convnext_base
+
+============================================================
+PHASE 2: UNIMODAL BASELINES
+============================================================
+
+============================================================
+Training Unimodal Baseline [binary] | 10 epochs
+============================================================

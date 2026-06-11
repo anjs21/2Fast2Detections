@@ -17,6 +17,8 @@ mkdir -p logs
 # Load the Python module available on Leonardo
 module load python/3.11.7
 
+export HF_HUB_OFFLINE=1
+
 # Activate the virtual environment
 source /leonardo/home/userexternal/asathyan/2Fast2Detections/code/.cvenv/bin/activate
 
