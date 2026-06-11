@@ -16,6 +16,7 @@ mkdir -p logs
 
 # Load the Python module available on Leonardo
 module load python/3.11.7
+module load cuda/12.6
 
 # Activate the virtual environment (created by setup_env.sh)
 source $HOME/2Fast2Detections/.env/bin/activate
