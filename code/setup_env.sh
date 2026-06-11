@@ -30,6 +30,8 @@ pip install torch>=2.1.0 --index-url https://download.pytorch.org/whl/cu121
 # Install the remaining dependencies
 pip install -r "$(dirname "$0")/requirements.txt" --extra-index-url https://download.pytorch.org/whl/cu121
 
+pip install clip open_clip_torch
+
 echo ""
 echo "Setup complete. Virtual environment is ready at $ENV_DIR"
 echo "Activate it with:  source $ENV_DIR/bin/activate"
