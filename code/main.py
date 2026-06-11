@@ -13,9 +13,8 @@ Improvements:
   - Leak-free splits: "original" honors the dataset's curated train/val folders;
     "transmitted"/"redigitalized" are split 80/20 from test_subset, disjoint at
     the image level (see data.build_splits). No image appears in both splits.
-  - DRCT-ConvB: ConvNeXt-Base shared backbone + supervised-contrastive head, with
-    optional Stable Diffusion reconstruction mining real images into hard-fakes
-    (drct_reconstruct.py).
+  - Shared ResNet50 backbone with two task heads, partially fine-tuned (early
+    backbone stages frozen; see models.apply_partial_finetune).
   - Forensics-aware augmentation: native-pixel crops + JPEG/noise degradations
     instead of resampling augmentation that erases generation artifacts.
   - Class-weighted cross-entropy, mixed-precision (AMP) training.
@@ -38,14 +37,13 @@ from torch.utils.data import DataLoader
 
 from config import (
     CONFIG, DATA_DIR, METADATA_TRAIN_VAL_CSV, PROJECT_ROOT,
-    ORIGINAL_TRAIN_DIR, ORIGINAL_VAL_DIR, TEST_SUBSET_DIR, DRCT_RECON_DIR,
+    ORIGINAL_TRAIN_DIR, ORIGINAL_VAL_DIR, TEST_SUBSET_DIR,
     download_train_val_data, download_test_data,
 )
 from data import (
     build_splits, MultiTaskDataset, SingleTaskDataset,
     get_train_transform, get_val_transform,
 )
-from drct_reconstruct import build_drct_reconstructions
 from stage_unimodal import run_unimodal_baselines
 from stage_multimodal import run_multimodal_training, run_comparison_and_analysis
 from stage_ablation import run_ablation_study
@@ -54,6 +52,8 @@ from stage_test_eval import save_results
 
 if __name__ == "__main__":
     start_time = time.time()
+
+    print(f"Traininf with {CONFIG['backbone']} backbone with {CONFIG['trainable_backbone_stages']} trainable backbone stages")
 
     # ------------------------------------------------------------------
     # PHASE 1: DATA PREPARATION
@@ -76,16 +76,6 @@ if __name__ == "__main__":
         subset_per_class=CONFIG["subset_per_class"], seed=CONFIG["seed"],
         csv_path=METADATA_TRAIN_VAL_CSV,
     )
-
-    # 1e-bis. DRCT: mine diffusion-reconstructed "hard fakes" from real TRAIN
-    # images and append them to the training set (optional, GPU+diffusers; see
-    # drct_reconstruct.py). val_df is left untouched so evaluation stays honest.
-    if CONFIG.get("use_drct"):
-        recon_df = build_drct_reconstructions(train_df, CONFIG, DRCT_RECON_DIR)
-        if len(recon_df):
-            keep = [c for c in train_df.columns if c in recon_df.columns]
-            train_df = pd.concat([train_df, recon_df[keep]], ignore_index=True)
-            print(f"Added {len(recon_df)} DRCT hard-fakes -> train size now {len(train_df)}")
 
     print(f"\nTrain subset size: {len(train_df)}")
     print(f"Validation subset size: {len(val_df)}")
@@ -157,13 +147,14 @@ if __name__ == "__main__":
     )
 
     # # ------------------------------------------------------------------
-    # # PHASE 7: ABLATION STUDY
+    # # PHASE 7: ABLATION STUDY (disabled for now)
     # # ------------------------------------------------------------------
     # print("\n" + "=" * 60)
     # print("PHASE 7: ABLATION STUDY (Loss Weight Sweep)")
     # print("=" * 60)
 
     # ablation_df = run_ablation_study(mt_train_loader, mt_val_loader)
+    ablation_df = None  # PHASE 7 disabled; save_results handles a None ablation
 
     # ------------------------------------------------------------------
     # PHASE 9: SAVE FINAL RESULTS

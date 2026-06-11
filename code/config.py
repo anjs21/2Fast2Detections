@@ -43,9 +43,6 @@ ORIGINAL_TRAIN_DIR = os.path.join(ORIGINAL_ROOT, "train")
 ORIGINAL_VAL_DIR = os.path.join(ORIGINAL_ROOT, "val")
 TEST_SUBSET_DIR = os.path.join(DATA_DIR, "test_subset")
 
-# DRCT diffusion-reconstructed "hard fake" images are written here (offline step)
-DRCT_RECON_DIR = os.path.join(DATA_DIR, "drct_recon")
-
 os.makedirs(RESULTS_DIR, exist_ok=True)
 os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
 
@@ -59,21 +56,17 @@ CONFIG = {
     "subset_per_class": 1000,
     "patience": 3,               # Early stopping patience
     "grad_clip_norm": 1.0,       # Gradient clipping max norm
-    "backbone": "convnext_base", # DRCT-ConvB backbone. Options: convnext_base, convnext_tiny, resnet50, resnet18, efficientnet_b0
+    "backbone": "resnet50",      # Shared backbone. Options: resnet50, resnet18, efficientnet_b0, convnext_tiny, convnext_base
     "num_workers": 4,
     "amp": True,                 # Mixed-precision training (no-op on CPU)
     "device": "cuda" if torch.cuda.is_available() else "cpu",
 
-    # ---- DRCT (Diffusion Reconstruction Contrastive Training) ----
-    "use_drct": True,            # Enable supervised-contrastive head + reconstructed hard-fakes
-    "contrastive_weight": 0.05,   # Lambda on the SupCon loss added to the joint CE loss
-    "contrastive_temp": 0.1,     # SupCon temperature
-    "drct_reconstruct": True,    # Run the offline SD reconstruction step (needs diffusers + GPU)
-    # sd-turbo is SD 2.1 distilled by Stability AI: ungated (the gated 2-1-base is
-    # deprecated/inaccessible), same StableDiffusionImg2ImgPipeline, far fewer steps.
-    "drct_sd_model": "stabilityai/sd-turbo",
-    "drct_recon_strength": 0.5,  # img2img noising strength for reconstructions (low = near-copy)
-    "drct_recon_per_class": 500, # How many real train images to reconstruct as hard-fakes
+    # ---- Partial fine-tuning ----
+    # Number of trailing backbone stages left trainable; the rest of the backbone
+    # is frozen and the two task heads are always trainable. For ResNet50 the
+    # stages are layer1..layer4, so 2 => train layer3 + layer4 + heads.
+    # Set to None for full fine-tuning, or 0 for a frozen-backbone linear probe.
+    "trainable_backbone_stages": 2,
 }
 
 # Silence warnings for clean console output

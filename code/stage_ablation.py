@@ -41,7 +41,10 @@ def run_ablation_study(train_loader, val_loader):
     for w1, w2, label in weight_configs:
         print(f"\n--- Config: w1={w1}, w2={w2} ({label}) ---")
 
-        model = MultiTaskModel(backbone_name=CONFIG["backbone"]).to(CONFIG["device"])
+        model = MultiTaskModel(
+            backbone_name=CONFIG["backbone"],
+            trainable_backbone_stages=CONFIG["trainable_backbone_stages"],
+        ).to(CONFIG["device"])
         model, logger = train_multitask_model(
             model, train_loader, val_loader, CONFIG, w1=w1, w2=w2, tag=f"ablation_{label}"
         )

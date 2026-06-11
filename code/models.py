@@ -1,19 +1,18 @@
 """
 Model architectures: backbone factory, MultiTaskModel, and SingleTaskModel.
 
-DRCT-ConvB: the multi-task model uses a ConvNeXt-Base shared backbone and, when
-DRCT is enabled, an extra normalized projection head that feeds the supervised
-contrastive loss (data.py mines diffusion-reconstructed "hard fakes" that the
-contrastive objective separates from real images).
+The multi-task model is a shared backbone (ResNet50 by default) with two
+classification heads — binary real/fake and 3-class transformation type.
+Partial fine-tuning is supported: the early backbone stages can be frozen so only
+the trailing stages and the task heads are trained (see `trainable_backbone_stages`).
 """
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torchvision import models
 
 
-def get_backbone(name="convnext_base"):
+def get_backbone(name="resnet50"):
     """Return a pretrained backbone and its feature dimension."""
     if name == "resnet18":
         base = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
@@ -40,6 +39,39 @@ def get_backbone(name="convnext_base"):
     return base, num_features
 
 
+def apply_partial_finetune(backbone, name, trainable_stages):
+    """Freeze the backbone except its last `trainable_stages` stages.
+
+    - trainable_stages is None -> full fine-tuning (everything trainable, no-op).
+    - trainable_stages == 0     -> frozen backbone (linear probe: only heads train).
+    - trainable_stages == k     -> the last k stages stay trainable, the rest frozen.
+
+    Stages are the four residual blocks (layer1..layer4) for ResNet, the feature
+    blocks for EfficientNet/ConvNeXt. The task heads live outside the backbone and
+    are always trainable.
+    """
+    if trainable_stages is None:
+        return  # full fine-tuning
+
+    # Identify the ordered list of stage modules for this backbone family.
+    if name.startswith("resnet"):
+        stages = [backbone.layer1, backbone.layer2, backbone.layer3, backbone.layer4]
+    elif name.startswith("efficientnet"):
+        stages = list(backbone.features)
+    elif name.startswith("convnext"):
+        stages = list(backbone.features)
+    else:
+        stages = list(backbone.children())
+
+    # Freeze everything, then unfreeze the trailing `trainable_stages` stages.
+    for p in backbone.parameters():
+        p.requires_grad = False
+    if trainable_stages > 0:
+        for stage in stages[-trainable_stages:]:
+            for p in stage.parameters():
+                p.requires_grad = True
+
+
 def _make_head(num_features, num_classes, dropout):
     return nn.Sequential(
         nn.Dropout(dropout),
@@ -51,43 +83,34 @@ def _make_head(num_features, num_classes, dropout):
 
 
 class MultiTaskModel(nn.Module):
-    """Shared backbone with two classification heads and a DRCT projection head."""
+    """Shared backbone with two classification heads (binary + transformation)."""
 
-    def __init__(self, backbone_name="convnext_base", num_binary=2, num_transform=3,
-                 dropout=0.3, proj_dim=128, use_projection=True):
+    def __init__(self, backbone_name="resnet50", num_binary=2, num_transform=3,
+                 dropout=0.3, trainable_backbone_stages=None):
         super().__init__()
         self.backbone, num_features = get_backbone(backbone_name)
-        self.use_projection = use_projection
+        apply_partial_finetune(self.backbone, backbone_name, trainable_backbone_stages)
 
         # Task Head 1: Binary (Real vs Fake)
         self.binary_head = _make_head(num_features, num_binary, dropout)
         # Task Head 2: Transformation type (Original / Transmitted / Redigitalized)
         self.transform_head = _make_head(num_features, num_transform, dropout)
 
-        # DRCT contrastive projection head (normalized embedding for SupCon)
-        if use_projection:
-            self.projection = nn.Sequential(
-                nn.Linear(num_features, num_features),
-                nn.ReLU(),
-                nn.Linear(num_features, proj_dim),
-            )
-
-    def forward(self, x, return_proj=False):
+    def forward(self, x):
         features = self.backbone(x)
         out_bin = self.binary_head(features)
         out_trans = self.transform_head(features)
-        if return_proj and self.use_projection:
-            proj = F.normalize(self.projection(features), dim=1)
-            return out_bin, out_trans, proj
         return out_bin, out_trans
 
 
 class SingleTaskModel(nn.Module):
     """Single-task model for unimodal baselines."""
 
-    def __init__(self, backbone_name="convnext_base", num_classes=2, dropout=0.3):
+    def __init__(self, backbone_name="resnet50", num_classes=2, dropout=0.3,
+                 trainable_backbone_stages=None):
         super().__init__()
         self.backbone, num_features = get_backbone(backbone_name)
+        apply_partial_finetune(self.backbone, backbone_name, trainable_backbone_stages)
         self.head = _make_head(num_features, num_classes, dropout)
 
     def forward(self, x):

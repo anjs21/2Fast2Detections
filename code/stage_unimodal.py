@@ -30,7 +30,8 @@ def run_unimodal_baselines(st_bin_train, st_bin_val, st_trans_train, st_trans_va
 
     # ---- 2a. Binary-only baseline ----
     model_bin_only = SingleTaskModel(
-        backbone_name=CONFIG["backbone"], num_classes=2
+        backbone_name=CONFIG["backbone"], num_classes=2,
+        trainable_backbone_stages=CONFIG["trainable_backbone_stages"],
     ).to(CONFIG["device"])
     model_bin_only, logger_bin = train_singletask_model(
         model_bin_only, st_bin_train, st_bin_val, CONFIG, task_name="binary"
@@ -48,7 +49,8 @@ def run_unimodal_baselines(st_bin_train, st_bin_val, st_trans_train, st_trans_va
 
     # ---- 2b. Transform-only baseline ----
     model_trans_only = SingleTaskModel(
-        backbone_name=CONFIG["backbone"], num_classes=3
+        backbone_name=CONFIG["backbone"], num_classes=3,
+        trainable_backbone_stages=CONFIG["trainable_backbone_stages"],
     ).to(CONFIG["device"])
     model_trans_only, logger_trans = train_singletask_model(
         model_trans_only, st_trans_train, st_trans_val, CONFIG, task_name="transform"

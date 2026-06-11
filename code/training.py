@@ -1,13 +1,12 @@
 """
-Training utilities: EarlyStopping, TrainingLogger, SupCon loss, train/eval epoch
-functions, and full training pipelines for both multi-task and single-task models.
+Training utilities: EarlyStopping, TrainingLogger, train/eval epoch functions, and
+full training pipelines for both multi-task and single-task models.
 
-DRCT-ConvB additions:
-  - SupConLoss: supervised contrastive loss on the projection head, applied to
-    binary real/fake labels (the diffusion-reconstructed hard-fakes from
-    drct_reconstruct.py are ordinary "fake" rows, so they participate here).
+Features:
   - Mixed-precision (AMP) training (no-op on CPU).
   - Class-weighted cross-entropy to counter the mild class imbalance.
+  - Only parameters with requires_grad=True are optimized, so partial fine-tuning
+    (frozen backbone stages, see models.apply_partial_finetune) is honored.
 """
 
 import os
@@ -62,42 +61,6 @@ class TrainingLogger:
         return pd.DataFrame(self.history)
 
 
-class SupConLoss(nn.Module):
-    """Supervised contrastive loss (Khosla et al. 2020), single-view variant.
-
-    Pulls together normalized embeddings sharing a label and pushes apart those
-    with different labels — here on binary real/fake labels, which is the core
-    of DRCT's contrastive training.
-    """
-
-    def __init__(self, temperature=0.1):
-        super().__init__()
-        self.temperature = temperature
-
-    def forward(self, features, labels):
-        device = features.device
-        b = features.shape[0]
-        if b < 2:
-            return features.sum() * 0.0  # no pairs in batch
-
-        labels = labels.view(-1, 1)
-        mask = torch.eq(labels, labels.T).float().to(device)        # [B,B] positives (incl. self)
-        logits = torch.matmul(features, features.T) / self.temperature
-        logits = logits - logits.max(dim=1, keepdim=True)[0].detach()  # stability
-
-        self_mask = torch.eye(b, device=device)
-        mask = mask * (1.0 - self_mask)                              # drop self-pairs
-        exp_logits = torch.exp(logits) * (1.0 - self_mask)
-        log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True) + 1e-12)
-
-        pos_count = mask.sum(1)
-        mean_log_prob_pos = (mask * log_prob).sum(1) / pos_count.clamp(min=1)
-        has_pos = pos_count > 0
-        if has_pos.sum() == 0:
-            return features.sum() * 0.0
-        return -(mean_log_prob_pos[has_pos]).mean()
-
-
 def compute_class_weights(df, col, label_map, device):
     """Inverse-frequency class weights for cross-entropy."""
     counts = torch.zeros(len(label_map), dtype=torch.float)
@@ -114,13 +77,11 @@ def compute_class_weights(df, col, label_map, device):
 # =============================================================================
 def train_multitask_epoch(model, loader, optimizer, criterion_bin, criterion_trans,
                           device, w1=0.5, w2=0.5, grad_clip_norm=1.0,
-                          contrastive_criterion=None, contrastive_weight=0.0,
                           scaler=None, use_amp=False):
-    """Train one epoch for the multi-task model (with optional DRCT contrastive loss)."""
+    """Train one epoch for the multi-task model (joint weighted CE loss)."""
     model.train()
-    running_loss, running_loss_bin, running_loss_trans, running_loss_con = 0.0, 0.0, 0.0, 0.0
+    running_loss, running_loss_bin, running_loss_trans = 0.0, 0.0, 0.0
     correct_bin, correct_trans, total = 0, 0, 0
-    use_con = contrastive_criterion is not None and contrastive_weight > 0
 
     for images, labels_bin, labels_trans in loader:
         images = images.to(device, non_blocking=True)
@@ -130,18 +91,10 @@ def train_multitask_epoch(model, loader, optimizer, criterion_bin, criterion_tra
         optimizer.zero_grad()
         with torch.autocast(device_type="cuda" if device == "cuda" else "cpu",
                             enabled=use_amp):
-            if use_con:
-                out_bin, out_trans, proj = model(images, return_proj=True)
-            else:
-                out_bin, out_trans = model(images)
-
+            out_bin, out_trans = model(images)
             loss_bin = criterion_bin(out_bin, labels_bin)
             loss_trans = criterion_trans(out_trans, labels_trans)
             total_loss = w1 * loss_bin + w2 * loss_trans
-            loss_con = torch.tensor(0.0, device=device)
-            if use_con:
-                loss_con = contrastive_criterion(proj.float(), labels_bin)
-                total_loss = total_loss + contrastive_weight * loss_con
 
         if scaler is not None and scaler.is_enabled():
             scaler.scale(total_loss).backward()
@@ -158,7 +111,6 @@ def train_multitask_epoch(model, loader, optimizer, criterion_bin, criterion_tra
         running_loss += total_loss.item() * bs
         running_loss_bin += loss_bin.item() * bs
         running_loss_trans += loss_trans.item() * bs
-        running_loss_con += float(loss_con) * bs
         correct_bin += (torch.max(out_bin, 1)[1] == labels_bin).sum().item()
         correct_trans += (torch.max(out_trans, 1)[1] == labels_trans).sum().item()
         total += bs
@@ -167,7 +119,6 @@ def train_multitask_epoch(model, loader, optimizer, criterion_bin, criterion_tra
         "loss": running_loss / total,
         "loss_bin": running_loss_bin / total,
         "loss_trans": running_loss_trans / total,
-        "loss_con": running_loss_con / total,
         "acc_bin": correct_bin / total,
         "acc_trans": correct_trans / total,
     }
@@ -262,8 +213,8 @@ def evaluate_singletask(model, loader, criterion, device):
 # Full Multi-Task Training Pipeline
 # =============================================================================
 def train_multitask_model(model, train_loader, val_loader, config, w1=0.5, w2=0.5, tag="multitask"):
-    """Full training loop with LR scheduler, early stopping, AMP, DRCT contrastive
-    loss, class-weighted CE, and best-model checkpointing."""
+    """Full training loop with LR scheduler, early stopping, AMP, class-weighted CE,
+    and best-model checkpointing."""
     device = config["device"]
     use_amp = config.get("amp", False) and device == "cuda"
 
@@ -274,11 +225,8 @@ def train_multitask_model(model, train_loader, val_loader, config, w1=0.5, w2=0.
     criterion_bin = nn.CrossEntropyLoss(weight=w_bin)
     criterion_trans = nn.CrossEntropyLoss(weight=w_trans)
 
-    use_con = config.get("use_drct", False) and getattr(model, "use_projection", False)
-    contrastive_criterion = SupConLoss(config.get("contrastive_temp", 0.1)) if use_con else None
-    contrastive_weight = config.get("contrastive_weight", 0.0) if use_con else 0.0
-
-    optimizer = optim.AdamW(model.parameters(), lr=config["lr"], weight_decay=config["weight_decay"])
+    trainable_params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = optim.AdamW(trainable_params, lr=config["lr"], weight_decay=config["weight_decay"])
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config["epochs"])
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     early_stop = EarlyStopping(patience=config["patience"])
@@ -288,15 +236,14 @@ def train_multitask_model(model, train_loader, val_loader, config, w1=0.5, w2=0.
     best_model_state = None
 
     print(f"\n{'='*60}")
-    print(f"Training [{tag}] | w1={w1}, w2={w2} | DRCT contrastive={contrastive_weight} | {config['epochs']} epochs")
+    print(f"Training [{tag}] | w1={w1}, w2={w2} | {config['epochs']} epochs")
     print(f"{'='*60}")
 
     for epoch in range(config["epochs"]):
         train_metrics = train_multitask_epoch(
             model, train_loader, optimizer, criterion_bin, criterion_trans,
             device, w1, w2, config["grad_clip_norm"],
-            contrastive_criterion=contrastive_criterion,
-            contrastive_weight=contrastive_weight, scaler=scaler, use_amp=use_amp,
+            scaler=scaler, use_amp=use_amp,
         )
         val_metrics = evaluate_multitask(model, val_loader, criterion_bin, criterion_trans, device)
         scheduler.step()
@@ -308,7 +255,6 @@ def train_multitask_model(model, train_loader, val_loader, config, w1=0.5, w2=0.
             train_loss=train_metrics["loss"],
             train_loss_bin=train_metrics["loss_bin"],
             train_loss_trans=train_metrics["loss_trans"],
-            train_loss_con=train_metrics["loss_con"],
             train_acc_bin=train_metrics["acc_bin"],
             train_acc_trans=train_metrics["acc_trans"],
             val_loss_bin=val_metrics["loss_bin"],
@@ -319,7 +265,7 @@ def train_multitask_model(model, train_loader, val_loader, config, w1=0.5, w2=0.
         )
 
         print(f"\nEpoch [{epoch+1}/{config['epochs']}] "
-              f"Loss: {train_metrics['loss']:.4f} (con: {train_metrics['loss_con']:.4f}) | "
+              f"Loss: {train_metrics['loss']:.4f} | "
               f"LR: {optimizer.param_groups[0]['lr']:.6f}")
         print(f"  [Train] Real/Fake: {train_metrics['acc_bin']*100:.2f}% | "
               f"Transform: {train_metrics['acc_trans']*100:.2f}%")
@@ -360,7 +306,8 @@ def train_singletask_model(model, train_loader, val_loader, config, task_name="b
         weights = compute_class_weights(train_df, "transform_label", TRANSFORM_MAP, device)
     criterion = nn.CrossEntropyLoss(weight=weights)
 
-    optimizer = optim.AdamW(model.parameters(), lr=config["lr"], weight_decay=config["weight_decay"])
+    trainable_params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = optim.AdamW(trainable_params, lr=config["lr"], weight_decay=config["weight_decay"])
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config["epochs"])
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
     early_stop = EarlyStopping(patience=config["patience"])

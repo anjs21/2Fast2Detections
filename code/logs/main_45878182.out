@@ -87,3 +87,221 @@ PHASE 2: UNIMODAL BASELINES
 ============================================================
 Training Unimodal Baseline [binary] | 10 epochs
 ============================================================
+
+Epoch [1/10] Loss: 0.4715 | LR: 0.000098
+  [Train] Acc: 77.67%
+  [Val]   Acc: 68.62%
+  ★ New best model saved (68.62%)
+
+Epoch [2/10] Loss: 0.3454 | LR: 0.000090
+  [Train] Acc: 85.07%
+  [Val]   Acc: 69.69%
+  ★ New best model saved (69.69%)
+
+Epoch [3/10] Loss: 0.2980 | LR: 0.000079
+  [Train] Acc: 87.30%
+  [Val]   Acc: 64.46%
+
+Epoch [4/10] Loss: 0.2591 | LR: 0.000065
+  [Train] Acc: 89.36%
+  [Val]   Acc: 70.69%
+  ★ New best model saved (70.69%)
+
+Epoch [5/10] Loss: 0.2159 | LR: 0.000050
+  [Train] Acc: 91.10%
+  [Val]   Acc: 65.00%
+
+Epoch [6/10] Loss: 0.1862 | LR: 0.000035
+  [Train] Acc: 92.51%
+  [Val]   Acc: 70.15%
+
+Epoch [7/10] Loss: 0.1767 | LR: 0.000021
+  [Train] Acc: 92.91%
+  [Val]   Acc: 74.46%
+  ★ New best model saved (74.46%)
+
+Epoch [8/10] Loss: 0.1498 | LR: 0.000010
+  [Train] Acc: 94.13%
+  [Val]   Acc: 68.62%
+
+Epoch [9/10] Loss: 0.1372 | LR: 0.000002
+  [Train] Acc: 94.59%
+  [Val]   Acc: 69.38%
+
+Epoch [10/10] Loss: 0.1364 | LR: 0.000000
+  [Train] Acc: 94.68%
+  [Val]   Acc: 69.23%
+
+⚠ Early stopping triggered at epoch 10
+
+✓ Restored best model (val acc: 74.46%)
+
+========================= Unimodal Binary Baseline =========================
+              precision    recall  f1-score   support
+
+        Real     0.9162    0.5385    0.6783       650
+        Fake     0.6732    0.9508    0.7883       650
+
+    accuracy                         0.7446      1300
+   macro avg     0.7947    0.7446    0.7333      1300
+weighted avg     0.7947    0.7446    0.7333      1300
+
+
+============================================================
+Training Unimodal Baseline [transform] | 10 epochs
+============================================================
+
+Epoch [1/10] Loss: 0.5789 | LR: 0.000098
+  [Train] Acc: 74.62%
+  [Val]   Acc: 46.38%
+  ★ New best model saved (46.38%)
+
+Epoch [2/10] Loss: 0.2993 | LR: 0.000090
+  [Train] Acc: 88.12%
+  [Val]   Acc: 44.23%
+
+Epoch [3/10] Loss: 0.2733 | LR: 0.000079
+  [Train] Acc: 89.15%
+  [Val]   Acc: 44.46%
+
+Epoch [4/10] Loss: 0.2199 | LR: 0.000065
+  [Train] Acc: 91.86%
+  [Val]   Acc: 44.77%
+
+⚠ Early stopping triggered at epoch 4
+
+✓ Restored best model (val acc: 46.38%)
+
+========================= Unimodal Transform Baseline =========================
+               precision    recall  f1-score   support
+
+     Original     0.4176    0.9940    0.5882       500
+  Transmitted     0.9400    0.1122    0.2004       419
+Redigitalized     0.9833    0.1549    0.2676       381
+
+     accuracy                         0.4638      1300
+    macro avg     0.7803    0.4203    0.3521      1300
+ weighted avg     0.7518    0.4638    0.3692      1300
+
+
+============================================================
+PHASE 3: MULTI-TASK JOINT TRAINING
+============================================================
+
+============================================================
+Training [multitask_equal] | w1=0.5, w2=0.5 | DRCT contrastive=0.05 | 10 epochs
+============================================================
+
+Epoch [1/10] Loss: 0.7108 (con: 3.3669) | LR: 0.000098
+  [Train] Real/Fake: 76.66% | Transform: 73.88%
+  [Val]   Real/Fake: 54.46% | Transform: 45.38%
+  ★ New best model saved (49.92%)
+
+Epoch [2/10] Loss: 0.5181 (con: 3.2887) | LR: 0.000090
+  [Train] Real/Fake: 82.40% | Transform: 87.40%
+  [Val]   Real/Fake: 62.46% | Transform: 44.46%
+  ★ New best model saved (53.46%)
+
+Epoch [3/10] Loss: 0.4479 (con: 3.2460) | LR: 0.000079
+  [Train] Real/Fake: 85.61% | Transform: 90.41%
+  [Val]   Real/Fake: 58.15% | Transform: 45.77%
+
+Epoch [4/10] Loss: 0.4035 (con: 3.1819) | LR: 0.000065
+  [Train] Real/Fake: 88.14% | Transform: 91.73%
+  [Val]   Real/Fake: 54.31% | Transform: 44.00%
+
+Epoch [5/10] Loss: 0.3792 (con: 3.1570) | LR: 0.000050
+  [Train] Real/Fake: 89.21% | Transform: 92.85%
+  [Val]   Real/Fake: 59.85% | Transform: 43.92%
+
+⚠ Early stopping triggered at epoch 5
+
+✓ Restored best model (val score: 53.46%)
+
+========================= Multi-Task Real/Fake =========================
+              precision    recall  f1-score   support
+
+        Real     0.8932    0.2831    0.4299       650
+        Fake     0.5740    0.9662    0.7202       650
+
+    accuracy                         0.6246      1300
+   macro avg     0.7336    0.6246    0.5750      1300
+weighted avg     0.7336    0.6246    0.5750      1300
+
+  ROC-AUC: 0.8756 | Average Precision: 0.9001
+
+========================= Multi-Task Transformation =========================
+               precision    recall  f1-score   support
+
+     Original     0.4090    0.9980    0.5802       500
+  Transmitted     0.9756    0.0955    0.1739       419
+Redigitalized     1.0000    0.1024    0.1857       381
+
+     accuracy                         0.4446      1300
+    macro avg     0.7949    0.3986    0.3133      1300
+ weighted avg     0.7648    0.4446    0.3336      1300
+
+
+============================================================
+PHASE 4: UNIMODAL vs MULTI-TASK COMPARISON
+============================================================
+
+############################################################
+UNIMODAL vs MULTI-TASK COMPARISON
+############################################################
+                    Model Real/Fake Acc (%) Transform Acc (%)
+   Unimodal (Binary only)             74.46               N/A
+Unimodal (Transform only)               N/A             46.38
+       Multi-task (Joint)             62.46             44.46
+
+  Delta (Binary):    -12.00% ↓ degraded
+  Delta (Transform): -1.92% ↓ degraded
+
+  ✗ Joint training DEGRADES both tasks — the tasks compete for capacity.
+
+============================================================
+PHASE 5: PER-TRANSFORMATION ACCURACY BREAKDOWN
+============================================================
+
+============================================================
+PER-TRANSFORMATION REAL/FAKE ACCURACY BREAKDOWN
+============================================================
+
+  [ORIGINAL] (n=500)
+    Overall Real/Fake Acc: 60.80%
+    Real images correct:   23.20% (n=250)
+    Fake images correct:   98.40% (n=250)
+
+  [TRANSMITTED] (n=419)
+    Overall Real/Fake Acc: 64.68%
+    Real images correct:   32.50% (n=200)
+    Fake images correct:   94.06% (n=219)
+
+  [REDIGITALIZED] (n=381)
+    Overall Real/Fake Acc: 62.20%
+    Real images correct:   30.50% (n=200)
+    Fake images correct:   97.24% (n=181)
+
+============================================================
+PHASE 6: CROSS-CLASS TRANSFORMATION TRACE ANALYSIS
+============================================================
+
+============================================================
+CROSS-CLASS TRANSFORMATION TRACE ANALYSIS
+============================================================
+
+Detailed 6-cell analysis (binary_class × transform_type):
+binary_class transform_type  n_samples  binary_acc  binary_misclass_rate  avg_confidence  transform_acc
+        real       original        250      0.2320                0.7680          0.2805         1.0000
+        real    transmitted        200      0.3250                0.6750          0.3253         0.0150
+        real  redigitalized        200      0.3050                0.6950          0.3411         0.0250
+        fake       original        250      0.9840                0.0160          0.9652         0.9960
+        fake    transmitted        219      0.9406                0.0594          0.9324         0.1689
+        fake  redigitalized        181      0.9724                0.0276          0.9355         0.1878
+
+============================================================
+PHASE 8: VISUAL INFERENCE
+============================================================
+=============================================
+Job finished at: Thu Jun 11 21:26:16 CEST 2026
+=============================================

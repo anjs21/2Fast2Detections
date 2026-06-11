@@ -33,7 +33,10 @@ def run_multimodal_training(mt_train_loader, mt_val_loader, val_df, val_tfm):
     print("PHASE 3: MULTI-TASK JOINT TRAINING")
     print("=" * 60)
 
-    model_mt = MultiTaskModel(backbone_name=CONFIG["backbone"]).to(CONFIG["device"])
+    model_mt = MultiTaskModel(
+        backbone_name=CONFIG["backbone"],
+        trainable_backbone_stages=CONFIG["trainable_backbone_stages"],
+    ).to(CONFIG["device"])
     model_mt, logger_mt = train_multitask_model(
         model_mt, mt_train_loader, mt_val_loader, CONFIG, w1=0.5, w2=0.5, tag="multitask_equal"
     )
