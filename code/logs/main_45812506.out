@@ -1,0 +1,230 @@
+Loading python/3.11.7
+  Loading requirement: bzip2/1.0.8-ib3znej libmd/1.0.4-2km2lxx
+    libbsd/0.12.1-oocs6an expat/2.6.2-p2t4wry ncurses/6.5-svfl57u
+    readline/8.2-zeda6mx gdbm/1.23-wiol7vk libiconv/1.17-nhc3mhm
+    xz/5.4.6-xxxg42c zlib-ng/2.1.6-jkgunjc libxml2/2.10.3-zbbe7lm
+    pigz/2.8-5bwzpml zstd/1.5.6-uq5yyux tar/1.34-jgektnv gettext/0.22.5-hsxgafg
+    libffi/3.4.6-4vs4jpp libxcrypt/4.4.35-7om46b5 sqlite/3.43.2-4kl5mnp
+    util-linux-uuid/2.38.1-5achpds
+=============================================
+Job started at: Thu Jun 11 15:37:57 CEST 2026
+Running on node: 
+Current directory: /leonardo/home/userexternal/jbiebuyc/2Fast2Detections/code
+Python location: /leonardo/home/userexternal/jbiebuyc/2Fast2Detections/.env/bin/python
+Allocated GPU Info:
+Thu Jun 11 15:37:57 2026       
++---------------------------------------------------------------------------------------+
+| NVIDIA-SMI 535.274.02             Driver Version: 535.274.02   CUDA Version: 12.2     |
+|-----------------------------------------+----------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |         Memory-Usage | GPU-Util  Compute M. |
+|                                         |                      |               MIG M. |
+|=========================================+======================+======================|
+|   0  NVIDIA A100-SXM-64GB           On  | 00000000:C8:00.0 Off |                    0 |
+| N/A   43C    P0              60W / 455W |      0MiB / 65536MiB |      0%      Default |
+|                                         |                      |             Disabled |
++-----------------------------------------+----------------------+----------------------+
+                                                                                         
++---------------------------------------------------------------------------------------+
+| Processes:                                                                            |
+|  GPU   GI   CI        PID   Type   Process name                            GPU Memory |
+|        ID   ID                                                             Usage      |
+|=======================================================================================|
+|  No running processes found                                                           |
++---------------------------------------------------------------------------------------+
+=============================================
+Thu Jun 11 15:38:05 2026       
++---------------------------------------------------------------------------------------+
+| NVIDIA-SMI 535.274.02             Driver Version: 535.274.02   CUDA Version: 12.2     |
+|-----------------------------------------+----------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |         Memory-Usage | GPU-Util  Compute M. |
+|                                         |                      |               MIG M. |
+|=========================================+======================+======================|
+|   0  NVIDIA A100-SXM-64GB           On  | 00000000:C8:00.0 Off |                    0 |
+| N/A   42C    P0              60W / 455W |      4MiB / 65536MiB |      0%      Default |
+|                                         |                      |             Disabled |
++-----------------------------------------+----------------------+----------------------+
+                                                                                         
++---------------------------------------------------------------------------------------+
+| Processes:                                                                            |
+|  GPU   GI   CI        PID   Type   Process name                            GPU Memory |
+|        ID   ID                                                             Usage      |
+|=======================================================================================|
+|  No running processes found                                                           |
++---------------------------------------------------------------------------------------+
+GPU available: True
+Device: cuda
+
+============================================================
+PHASE 1: DATA PREPARATION
+============================================================
+Train/val data is already present in '/leonardo_scratch/large/userexternal/jbiebuyc/CV/data/RRDataset_original_train_val'. Skipping download!
+Top level folders in data directory: ['test_subset', 'RRDataset_original_train_val']
+Test subset is already extracted (4000 images found). Skipping download!
+Loading existing metadata from /leonardo/home/userexternal/jbiebuyc/2Fast2Detections/metadata_train_val.csv
+
+Train subset size: 4724
+Validation subset size: 1182
+
+Training balance matrix:
+binary_label     fake  real
+transform_label            
+original          800   800
+redigitalized     724   800
+transmitted       800   800
+
+--- Hardware & Subset Documentation ---
+Device: cuda
+GPU: NVIDIA A100-SXM-64GB
+GPU Memory: 68.1 GB
+Subset per class: 1000
+Total training images: 4724
+Total validation images: 1182
+Backbone: aide
+
+============================================================
+PHASE 3: MULTI-TASK JOINT TRAINING
+============================================================
+build model with convnext_xxl
+Loading AIDE checkpoint from: /leonardo_scratch/large/userexternal/jbiebuyc/AIDE/GenImage_train.pth
+
+============================================================
+Training [multitask] | method=GradNormBalancer | freeze=0 epochs | 10 epochs total
+============================================================
+
+Epoch [1/10] Loss: 1.7531 | LR: 0.000098
+  [Train] Real/Fake: 58.40% | Transform: 38.57%
+  [Val]   Real/Fake: 67.26% | Transform: 42.72%
+  ★ New best model saved (54.99%)
+
+Epoch [2/10] Loss: 1.6903 | LR: 0.000090
+  [Train] Real/Fake: 64.35% | Transform: 44.07%
+  [Val]   Real/Fake: 71.57% | Transform: 44.42%
+  ★ New best model saved (57.99%)
+
+Epoch [3/10] Loss: 1.6360 | LR: 0.000079
+  [Train] Real/Fake: 70.36% | Transform: 45.89%
+  [Val]   Real/Fake: 75.13% | Transform: 48.05%
+  ★ New best model saved (61.59%)
+
+Epoch [4/10] Loss: 1.5967 | LR: 0.000065
+  [Train] Real/Fake: 71.87% | Transform: 48.94%
+  [Val]   Real/Fake: 77.83% | Transform: 50.51%
+  ★ New best model saved (64.17%)
+
+Epoch [5/10] Loss: 1.5766 | LR: 0.000050
+  [Train] Real/Fake: 73.48% | Transform: 49.09%
+  [Val]   Real/Fake: 78.34% | Transform: 49.83%
+
+Epoch [6/10] Loss: 1.5538 | LR: 0.000035
+  [Train] Real/Fake: 73.65% | Transform: 49.62%
+  [Val]   Real/Fake: 78.00% | Transform: 50.25%
+
+Epoch [7/10] Loss: 1.5524 | LR: 0.000021
+  [Train] Real/Fake: 74.60% | Transform: 50.72%
+  [Val]   Real/Fake: 77.75% | Transform: 51.02%
+  ★ New best model saved (64.38%)
+
+Epoch [8/10] Loss: 1.5345 | LR: 0.000010
+  [Train] Real/Fake: 75.72% | Transform: 51.21%
+  [Val]   Real/Fake: 78.09% | Transform: 50.34%
+
+Epoch [9/10] Loss: 1.5314 | LR: 0.000002
+  [Train] Real/Fake: 76.29% | Transform: 50.72%
+  [Val]   Real/Fake: 78.09% | Transform: 50.17%
+
+Epoch [10/10] Loss: 1.5264 | LR: 0.000000
+  [Train] Real/Fake: 76.06% | Transform: 50.95%
+  [Val]   Real/Fake: 78.09% | Transform: 49.75%
+
+⚠ Early stopping triggered at epoch 10
+
+✓ Restored best model (val score: 64.38%)
+
+========================= Multi-Task Real/Fake =========================
+              precision    recall  f1-score   support
+
+        Real     0.7565    0.8283    0.7908       600
+        Fake     0.8038    0.7251    0.7624       582
+
+    accuracy                         0.7775      1182
+   macro avg     0.7801    0.7767    0.7766      1182
+weighted avg     0.7798    0.7775    0.7768      1182
+
+
+========================= Multi-Task Transformation =========================
+               precision    recall  f1-score   support
+
+     Original     0.4553    0.7250    0.5593       400
+  Transmitted     0.3850    0.1800    0.2453       400
+Redigitalized     0.6732    0.6309    0.6514       382
+
+     accuracy                         0.5102      1182
+    macro avg     0.5045    0.5120    0.4853      1182
+ weighted avg     0.5019    0.5102    0.4828      1182
+
+
+============================================================
+PHASE 4: UNIMODAL vs MULTI-TASK COMPARISON
+============================================================
+
+############################################################
+UNIMODAL vs MULTI-TASK COMPARISON
+############################################################
+                    Model Real/Fake Acc (%) Transform Acc (%)
+   Unimodal (Binary only)              0.00               N/A
+Unimodal (Transform only)               N/A              0.00
+       Multi-task (Joint)             77.75             51.02
+
+  Delta (Binary):    +77.75% ↑ improved
+  Delta (Transform): +51.02% ↑ improved
+
+  ✓ Joint training IMPROVES both tasks — the tasks complement each other.
+
+============================================================
+PHASE 5: PER-TRANSFORMATION ACCURACY BREAKDOWN
+============================================================
+
+============================================================
+PER-TRANSFORMATION REAL/FAKE ACCURACY BREAKDOWN
+============================================================
+
+  [ORIGINAL] (n=400)
+    Overall Real/Fake Acc: 80.50%
+    Real images correct:   81.50% (n=200)
+    Fake images correct:   79.50% (n=200)
+
+  [TRANSMITTED] (n=400)
+    Overall Real/Fake Acc: 80.00%
+    Real images correct:   84.50% (n=200)
+    Fake images correct:   75.50% (n=200)
+
+  [REDIGITALIZED] (n=382)
+    Overall Real/Fake Acc: 72.51%
+    Real images correct:   82.50% (n=200)
+    Fake images correct:   61.54% (n=182)
+
+============================================================
+PHASE 6: CROSS-CLASS TRANSFORMATION TRACE ANALYSIS
+============================================================
+
+============================================================
+CROSS-CLASS TRANSFORMATION TRACE ANALYSIS
+============================================================
+
+Detailed 6-cell analysis (binary_class × transform_type):
+binary_class transform_type  n_samples  binary_acc  binary_misclass_rate  avg_confidence  transform_acc
+        real       original        200      0.8150                0.1850          0.6569         0.7100
+        real    transmitted        200      0.8450                0.1550          0.6630         0.1800
+        real  redigitalized        200      0.8250                0.1750          0.6592         0.6200
+        fake       original        200      0.7950                0.2050          0.6656         0.7400
+        fake    transmitted        200      0.7550                0.2450          0.6595         0.1800
+        fake  redigitalized        182      0.6154                0.3846          0.5739         0.6429
+
+============================================================
+PHASE 8: VISUAL INFERENCE
+============================================================
+=============================================
+Job finished at: Thu Jun 11 16:02:45 CEST 2026
+=============================================

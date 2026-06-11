@@ -1,0 +1,6 @@
+WARNING:root:No pretrained weights loaded for model 'convnext_xxlarge'. Model initialized randomly.
+Traceback (most recent call last):
+  File "/leonardo/home/userexternal/jbiebuyc/2Fast2Detections/code/main.py", line 205, in <module>
+    ablation_df, breakdown_df, trace_df
+    ^^^^^^^^^^^
+NameError: name 'ablation_df' is not defined
