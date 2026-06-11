@@ -43,42 +43,54 @@ class AIDEBackboneWrapper(nn.Module):
 
     def forward(self, x):
         B, C, H, W = x.shape
-        
-        # 1. Unnormalize input to [0, 1] range for DCT
+
+        # 1. Unnormalize to [0,1] for DCT
         x_unnorm = x * self.std + self.mean
-        
-        # 2. Resize to 256x256 if needed
-        if H != 256 or W != 256:
-            x_unnorm_256 = F.interpolate(x_unnorm, size=(256, 256), mode='bilinear', align_corners=False)
-        else:
-            x_unnorm_256 = x_unnorm
-            
-        # 3. Compute sample-wise DCT reconstructions
+
+        # 2. Compute DCT patches (32x32 each) — no input resizing needed
         x_minmin_list, x_maxmax_list, x_minmin1_list, x_maxmax1_list = [], [], [], []
         for i in range(B):
-            x_mm, x_mx, x_mm1, x_mx1 = self.dct(x_unnorm_256[i])
+            x_mm, x_mx, x_mm1, x_mx1 = self.dct(x_unnorm[i])
             x_minmin_list.append(x_mm)
             x_maxmax_list.append(x_mx)
             x_minmin1_list.append(x_mm1)
             x_maxmax1_list.append(x_mx1)
-            
-        x_minmin = torch.stack(x_minmin_list)
+
+        x_minmin = torch.stack(x_minmin_list)   # [B, 3, 32, 32]
         x_maxmax = torch.stack(x_maxmax_list)
         x_minmin1 = torch.stack(x_minmin1_list)
         x_maxmax1 = torch.stack(x_maxmax1_list)
-        
-        # 4. Re-normalize all inputs
-        x_0 = (x_unnorm_256 - self.mean) / self.std
-        x_minmin = (x_minmin - self.mean) / self.std
-        x_maxmax = (x_maxmax - self.mean) / self.std
+
+        # 3. Re-normalize DCT patches for ResNet
+        x_minmin  = (x_minmin  - self.mean) / self.std
+        x_maxmax  = (x_maxmax  - self.mean) / self.std
         x_minmin1 = (x_minmin1 - self.mean) / self.std
         x_maxmax1 = (x_maxmax1 - self.mean) / self.std
-        
-        # 5. Stack inputs along time/channel dimension: shape (B, 5, C, 256, 256)
-        x_stacked = torch.stack([x_minmin, x_maxmax, x_minmin1, x_maxmax1, x_0], dim=1)
-        
-        # 6. Forward pass through AIDE to get 2304-dimensional joint features
-        features = self.aide_model(x_stacked)
+
+        # 4. ResNet branch — HPF then ResNet, size-agnostic due to AdaptiveAvgPool
+        aide = self.aide_model
+        x_min  = aide.model_min(aide.hpf(x_minmin))
+        x_max  = aide.model_max(aide.hpf(x_maxmax))
+        x_min1 = aide.model_min(aide.hpf(x_minmin1))
+        x_max1 = aide.model_max(aide.hpf(x_maxmax1))
+        x_1 = (x_min + x_max + x_min1 + x_max1) / 4   # [B, 2048]
+
+        # 5. ConvNeXt branch — resize only here, only for this branch
+        x_tokens = F.interpolate(x_unnorm, size=(256, 256), mode='bilinear', align_corners=False)
+
+        with torch.no_grad():
+            clip_mean = torch.tensor([0.48145466, 0.4578275, 0.40821073]).to(x_tokens).view(1, 3, 1, 1)
+            clip_std  = torch.tensor([0.26862954, 0.26130258, 0.27577711]).to(x_tokens).view(1, 3, 1, 1)
+            dinov2_mean = torch.tensor([0.485, 0.456, 0.406]).to(x_tokens).view(1, 3, 1, 1)
+            dinov2_std  = torch.tensor([0.229, 0.224, 0.225]).to(x_tokens).view(1, 3, 1, 1)
+
+            convnext_input = x_tokens * (dinov2_std / clip_std) + (dinov2_mean - clip_mean) / clip_std
+            local_feats = aide.openclip_convnext_xxl(convnext_input)   # [B, 3072, 8, 8]
+            local_feats = aide.avgpool(local_feats).view(B, -1)         # [B, 3072]
+            x_0 = aide.convnext_proj(local_feats)                       # [B, 256]
+
+        # 6. Concatenate and return joint features
+        features = torch.cat([x_0, x_1], dim=1)   # [B, 2304]
         return features
 
 
@@ -100,11 +112,16 @@ def get_backbone(name="resnet50"):
         base.classifier = nn.Identity()
         shared_layer = base.features[-1]
     elif name == "aide":
-        # Check both potential checkpoint names (case-insensitive)
-        ckpt_dir = Path(__file__).resolve().parent.parent / "checkpoint_AIDE"
-        checkpoint_path = ckpt_dir / "GenImage_train.pth"
-        if not checkpoint_path.exists():
-            checkpoint_path = ckpt_dir / "genimage_train.pth"
+        checkpoint_path = None
+        path = Path("/leonardo_scratch/large/userexternal/jbiebuyc/AIDE/GenImage_train.pth")
+        if path.exists():
+            checkpoint_path = path
+
+        if not checkpoint_path:
+            ckpt_dir = Path(__file__).resolve().parent.parent / "checkpoint_AIDE"
+            checkpoint_path = ckpt_dir / "GenImage_train.pth"
+            if not checkpoint_path.exists():
+                checkpoint_path = ckpt_dir / "genimage_train.pth"
             
         base = AIDEBackboneWrapper(checkpoint_path=str(checkpoint_path) if checkpoint_path.exists() else None)
         num_features = 2048 + 256  # 2304 joint features (2048 from ResNet branches + 256 from ConvNeXt branch)
