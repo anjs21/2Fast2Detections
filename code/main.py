@@ -47,7 +47,7 @@ from stage_unimodal import run_unimodal_baselines
 from stage_multimodal import run_multimodal_training, run_comparison_and_analysis
 from stage_ablation import run_ablation_study
 from stage_test_eval import save_results
-
+from pathlib import Path
 
 if __name__ == "__main__":
     start_time = time.time()
@@ -68,10 +68,14 @@ if __name__ == "__main__":
         print(f"Loading existing metadata from {METADATA_TRAIN_VAL_CSV}")
         df_train_val = pd.read_csv(METADATA_TRAIN_VAL_CSV)
         
-        # Ensure relative paths in cached metadata are resolved to absolute using PROJECT_ROOT
+        # Ensure relative paths in cached metadata are resolved to absolute using DATA_DIR
         def make_absolute(path):
             if not os.path.isabs(path):
-                return os.path.abspath(os.path.join(PROJECT_ROOT, path))
+                # If path starts with 'data/', resolve relative to DATA_DIR
+                parts = Path(path).parts
+                if parts and parts[0] == "data":
+                    path = os.path.join(*parts[1:])
+                return os.path.abspath(os.path.join(DATA_DIR, path))
             return path
         df_train_val["filepath"] = df_train_val["filepath"].apply(make_absolute)
 
@@ -132,30 +136,30 @@ if __name__ == "__main__":
     mt_val_loader = DataLoader(mt_val_dataset, batch_size=CONFIG["batch_size"],
                                 shuffle=False, num_workers=2, pin_memory=True)
 
-    # Single-task dataloaders (for unimodal baselines)
-    st_bin_train = DataLoader(
-        SingleTaskDataset(train_df, "binary", train_tfm),
-        batch_size=CONFIG["batch_size"], shuffle=True, num_workers=2, pin_memory=True
-    )
-    st_bin_val = DataLoader(
-        SingleTaskDataset(val_df, "binary", val_tfm),
-        batch_size=CONFIG["batch_size"], shuffle=False, num_workers=2, pin_memory=True
-    )
-    st_trans_train = DataLoader(
-        SingleTaskDataset(train_df, "transform", train_tfm),
-        batch_size=CONFIG["batch_size"], shuffle=True, num_workers=2, pin_memory=True
-    )
-    st_trans_val = DataLoader(
-        SingleTaskDataset(val_df, "transform", val_tfm),
-        batch_size=CONFIG["batch_size"], shuffle=False, num_workers=2, pin_memory=True
-    )
+    # # Single-task dataloaders (for unimodal baselines)
+    # st_bin_train = DataLoader(
+    #     SingleTaskDataset(train_df, "binary", train_tfm),
+    #     batch_size=CONFIG["batch_size"], shuffle=True, num_workers=2, pin_memory=True
+    # )
+    # st_bin_val = DataLoader(
+    #     SingleTaskDataset(val_df, "binary", val_tfm),
+    #     batch_size=CONFIG["batch_size"], shuffle=False, num_workers=2, pin_memory=True
+    # )
+    # st_trans_train = DataLoader(
+    #     SingleTaskDataset(train_df, "transform", train_tfm),
+    #     batch_size=CONFIG["batch_size"], shuffle=True, num_workers=2, pin_memory=True
+    # )
+    # st_trans_val = DataLoader(
+    #     SingleTaskDataset(val_df, "transform", val_tfm),
+    #     batch_size=CONFIG["batch_size"], shuffle=False, num_workers=2, pin_memory=True
+    # )
 
     # ------------------------------------------------------------------
     # PHASE 2: UNIMODAL BASELINES
     # ------------------------------------------------------------------
-    unimodal_bin_acc, unimodal_trans_acc = run_unimodal_baselines(
-        st_bin_train, st_bin_val, st_trans_train, st_trans_val
-    )
+    # unimodal_bin_acc, unimodal_trans_acc = run_unimodal_baselines(
+    #     st_bin_train, st_bin_val, st_trans_train, st_trans_val
+    # )
 
     # ------------------------------------------------------------------
     # PHASE 3: MULTI-TASK JOINT TRAINING
@@ -177,7 +181,8 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     comparison_df, breakdown_df, trace_df = run_comparison_and_analysis(
         results, val_df, val_tfm, model_mt,
-        unimodal_bin_acc, unimodal_trans_acc,
+        # unimodal_bin_acc, unimodal_trans_acc,
+        0, 0,
         multitask_bin_acc, multitask_trans_acc
     )
 
@@ -195,7 +200,7 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     save_results(
         model_mt, start_time,
-        unimodal_bin_acc, unimodal_trans_acc,
+        0, 0,  # unimodal_bin_acc, unimodal_trans_acc,
         multitask_bin_acc, multitask_trans_acc,
         ablation_df, breakdown_df, trace_df
     )
