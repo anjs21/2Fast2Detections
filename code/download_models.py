@@ -27,21 +27,31 @@ print("=======================================================")
 try:
     from torchvision import models
 
-    # Default backbone (used by every stage via CONFIG["backbone"]).
     print("Downloading resnet50 weights...")
     models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+    print("Downloading convnext_tiny weights...")
+    models.convnext_tiny(weights=models.ConvNeXt_Tiny_Weights.DEFAULT)
 
     # Remaining backbones supported by models.get_backbone() are pre-cached so any
     # CONFIG["backbone"] swap works offline (see config.py: backbone options).
-    # print("Downloading resnet18 weights...")
-    # models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-
     # print("Downloading efficientnet_b0 weights...")
     # models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
 
     print("Model backbones downloaded successfully!")
 except Exception as e:
     print(f"Error downloading models: {e}")
+
+# CLIP image-encoder weights (binary specialist; only needed if CONFIG["backbone"]
+# is a clip_* option). Guarded so it never blocks the torchvision pipeline.
+try:
+    from models import CLIP_MODELS
+    from transformers import CLIPVisionModel
+    for clip_name in ("clip_vit_l14",):
+        print(f"Downloading CLIP weights: {CLIP_MODELS[clip_name]} ...")
+        CLIPVisionModel.from_pretrained(CLIP_MODELS[clip_name])
+    print("CLIP weights cached successfully!")
+except Exception as e:
+    print(f"Skipping CLIP pre-download ({e}). Only needed for a clip_* backbone.")
 
 print("\n=======================================================")
 print("All required models and datasets are pre-downloaded and cached!")

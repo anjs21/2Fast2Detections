@@ -12,8 +12,38 @@ import torch.nn as nn
 from torchvision import models
 
 
+# CLIP image-encoder model ids (HuggingFace). ViT-L/14 is the UniversalFakeDetect
+# (Ojha et al., CVPR 2023) backbone; it expects 224x224 inputs.
+CLIP_MODELS = {
+    "clip_vit_l14": "openai/clip-vit-large-patch14",
+    "clip_vit_b16": "openai/clip-vit-base-patch16",
+}
+
+
+class CLIPBackbone(nn.Module):
+    """Wrap a HuggingFace CLIP vision tower to return a pooled feature vector.
+
+    Used as a (typically frozen) backbone for the binary AI-image detector — the
+    strong UniversalFakeDetect recipe. NOTE: CLIP expects CLIP-specific input
+    normalization (see data.normalization_for), not ImageNet stats.
+    """
+
+    def __init__(self, model_name):
+        super().__init__()
+        from transformers import CLIPVisionModel
+        # Force safetensors: transformers refuses .bin weights on torch < 2.6.
+        self.vision = CLIPVisionModel.from_pretrained(model_name, use_safetensors=True)
+        self.num_features = self.vision.config.hidden_size
+
+    def forward(self, x):
+        return self.vision(pixel_values=x).pooler_output  # [B, hidden]
+
+
 def get_backbone(name="resnet50"):
     """Return a pretrained backbone and its feature dimension."""
+    if name in CLIP_MODELS:
+        base = CLIPBackbone(CLIP_MODELS[name])
+        return base, base.num_features
     if name == "resnet18":
         base = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         num_features = base.fc.in_features
@@ -53,23 +83,29 @@ def apply_partial_finetune(backbone, name, trainable_stages):
     if trainable_stages is None:
         return  # full fine-tuning
 
-    # Identify the ordered list of stage modules for this backbone family.
+    # Freeze the whole backbone first (trainable_stages == 0 -> frozen probe).
+    for p in backbone.parameters():
+        p.requires_grad = False
+    if trainable_stages <= 0:
+        return
+
+    # Identify the ordered list of stage modules for this backbone family, then
+    # unfreeze the trailing `trainable_stages` of them.
     if name.startswith("resnet"):
         stages = [backbone.layer1, backbone.layer2, backbone.layer3, backbone.layer4]
     elif name.startswith("efficientnet"):
         stages = list(backbone.features)
     elif name.startswith("convnext"):
         stages = list(backbone.features)
+    elif name.startswith("clip"):
+        # CLIP "stages" = transformer encoder layers (last k stay trainable).
+        stages = list(backbone.vision.encoder.layers)
     else:
         stages = list(backbone.children())
 
-    # Freeze everything, then unfreeze the trailing `trainable_stages` stages.
-    for p in backbone.parameters():
-        p.requires_grad = False
-    if trainable_stages > 0:
-        for stage in stages[-trainable_stages:]:
-            for p in stage.parameters():
-                p.requires_grad = True
+    for stage in stages[-trainable_stages:]:
+        for p in stage.parameters():
+            p.requires_grad = True
 
 
 def _make_head(num_features, num_classes, dropout):

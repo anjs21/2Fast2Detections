@@ -58,7 +58,13 @@ CONFIG = {
     "test_frac": 0.15,           # Group-aware split: fraction of source scenes held out for test
     "patience": 3,               # Early stopping patience
     "grad_clip_norm": 1.0,       # Gradient clipping max norm
-    "backbone": "resnet50",      # Shared backbone. Options: resnet50, resnet18, efficientnet_b0, convnext_tiny, convnext_base
+    # Shared backbone. Options: resnet50, resnet18, efficientnet_b0, convnext_tiny,
+    # convnext_base, clip_vit_l14, clip_vit_b16.
+    # CLIP (binary specialist): set backbone="clip_vit_l14" AND
+    # trainable_backbone_stages=0 (frozen encoder + trainable heads, the
+    # UniversalFakeDetect recipe). CLIP's strength is the binary task; expect the
+    # transform head to be weaker with a frozen semantic encoder.
+    "backbone": "clip_vit_l14",
     "num_workers": 4,
     "amp": True,                 # Mixed-precision training (no-op on CPU)
     "device": "cuda" if torch.cuda.is_available() else "cpu",
@@ -68,7 +74,7 @@ CONFIG = {
     # is frozen and the two task heads are always trainable. For ResNet50 the
     # stages are layer1..layer4, so 2 => train layer3 + layer4 + heads.
     # Set to None for full fine-tuning, or 0 for a frozen-backbone linear probe.
-    "trainable_backbone_stages": None,
+    "trainable_backbone_stages": 0,
 }
 
 # Silence warnings for clean console output

@@ -303,6 +303,17 @@ class SingleTaskDataset(Dataset):
 # the transmission/re-digitization pipeline instead of erasing its signature.
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
+# CLIP uses its own input normalization; using ImageNet stats for a CLIP backbone
+# silently shifts the inputs off the distribution it was trained on.
+CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]
+CLIP_STD = [0.26862954, 0.26130258, 0.27577711]
+
+
+def normalization_for(backbone):
+    """Return (mean, std) appropriate for the given backbone."""
+    if str(backbone).startswith("clip"):
+        return CLIP_MEAN, CLIP_STD
+    return IMAGENET_MEAN, IMAGENET_STD
 
 
 class RandomJPEG:
@@ -352,8 +363,9 @@ class ResizeIfSmaller:
         return img
 
 
-def get_train_transform(img_size):
+def get_train_transform(img_size, backbone="resnet50"):
     """Forensics-friendly training augmentation: crop native pixels + degradations."""
+    mean, std = normalization_for(backbone)
     return transforms.Compose([
         ResizeIfSmaller(img_size),
         transforms.RandomCrop(img_size),
@@ -361,19 +373,20 @@ def get_train_transform(img_size):
         # RandomJPEG(p=0.5, quality_range=(50, 95)),
         transforms.ToTensor(),
         # GaussianNoise(p=0.3, std=0.02),
-        transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+        transforms.Normalize(mean=mean, std=std),
     ])
 
 
-def get_val_transform(img_size):
+def get_val_transform(img_size, backbone="resnet50"):
     """Validation/test transform: aspect-preserving resize + center crop.
 
     Avoids the square `Resize((s, s))` distortion of the previous pipeline; only
     resizes the shorter side, then center-crops, minimizing resampling.
     """
+    mean, std = normalization_for(backbone)
     return transforms.Compose([
-        ResizeIfSmaller(img_size), 
+        ResizeIfSmaller(img_size),
         transforms.CenterCrop(img_size),
         transforms.ToTensor(),
-        transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+        transforms.Normalize(mean=mean, std=std),
     ])

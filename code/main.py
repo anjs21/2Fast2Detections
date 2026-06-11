@@ -99,8 +99,8 @@ if __name__ == "__main__":
     print(f"Backbone: {CONFIG['backbone']}")
 
     # 1g. Create DataLoaders
-    train_tfm = get_train_transform(CONFIG["img_size"])
-    val_tfm = get_val_transform(CONFIG["img_size"])
+    train_tfm = get_train_transform(CONFIG["img_size"], CONFIG["backbone"])
+    val_tfm = get_val_transform(CONFIG["img_size"], CONFIG["backbone"])
 
     def _loader(dataset, shuffle):
         return DataLoader(dataset, batch_size=CONFIG["batch_size"], shuffle=shuffle,
