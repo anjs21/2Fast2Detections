@@ -75,6 +75,16 @@ CONFIG = {
     # stages are layer1..layer4, so 2 => train layer3 + layer4 + heads.
     # Set to None for full fine-tuning, or 0 for a frozen-backbone linear probe.
     "trainable_backbone_stages": 0,
+
+    # Differential learning & backbone freezing
+    "freeze_epochs": 0,          # Epochs to keep backbone frozen at start (0 = no freeze)
+    "backbone_lr": 1e-5,         # LR for backbone after unfreeze
+    "head_lr": 1e-4,             # LR for task heads
+    # Loss weighting method: "static", "uncertainty", or "gradnorm"
+    # Note: "gradnorm" is incompatible with freeze_epochs > 0
+    "loss_weighting_method": "gradnorm",
+    "gradnorm_alpha": 1.5,       # GradNorm task-asymmetry exponent
+    "gradnorm_weight_lr": 1e-3,  # LR for GradNorm task weight optimizer
 }
 
 # Silence warnings for clean console output

@@ -48,25 +48,30 @@ def get_backbone(name="resnet50"):
         base = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         num_features = base.fc.in_features
         base.fc = nn.Identity()
+        shared_layer = base.layer4[-1]
     elif name == "resnet50":
         base = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
         num_features = base.fc.in_features
         base.fc = nn.Identity()
+        shared_layer = base.layer4[-1]
     elif name == "efficientnet_b0":
         base = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.DEFAULT)
         num_features = base.classifier[1].in_features
         base.classifier = nn.Identity()
+        shared_layer = base.features[-1]
     elif name == "convnext_tiny":
         base = models.convnext_tiny(weights=models.ConvNeXt_Tiny_Weights.DEFAULT)
         num_features = base.classifier[2].in_features
         base.classifier = nn.Flatten(1)  # keep global-pooled features, drop the LayerNorm+Linear classifier
+        shared_layer = base.features[-1]
     elif name == "convnext_base":
         base = models.convnext_base(weights=models.ConvNeXt_Base_Weights.DEFAULT)
         num_features = base.classifier[2].in_features
         base.classifier = nn.Flatten(1)
+        shared_layer = base.features[-1]
     else:
         raise ValueError(f"Unknown backbone: {name}")
-    return base, num_features
+    return base, num_features, shared_layer
 
 
 def apply_partial_finetune(backbone, name, trainable_stages):
@@ -124,7 +129,7 @@ class MultiTaskModel(nn.Module):
     def __init__(self, backbone_name="resnet50", num_binary=2, num_transform=3,
                  dropout=0.3, trainable_backbone_stages=None):
         super().__init__()
-        self.backbone, num_features = get_backbone(backbone_name)
+        self.backbone, num_features, self.shared_layer = get_backbone(backbone_name)
         apply_partial_finetune(self.backbone, backbone_name, trainable_backbone_stages)
 
         # Task Head 1: Binary (Real vs Fake)
@@ -145,7 +150,7 @@ class SingleTaskModel(nn.Module):
     def __init__(self, backbone_name="resnet50", num_classes=2, dropout=0.3,
                  trainable_backbone_stages=None):
         super().__init__()
-        self.backbone, num_features = get_backbone(backbone_name)
+        self.backbone, num_features, _ = get_backbone(backbone_name)
         apply_partial_finetune(self.backbone, backbone_name, trainable_backbone_stages)
         self.head = _make_head(num_features, num_classes, dropout)
 

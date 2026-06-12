@@ -35,6 +35,7 @@ import matplotlib
 matplotlib.use('Agg')
 import pandas as pd
 from torch.utils.data import DataLoader
+from training import StaticWeighter, UncertaintyLoss, GradNormBalancer
 
 from config import (
     CONFIG, DATA_DIR, METADATA_TRAIN_VAL_CSV, PROJECT_ROOT,
@@ -130,8 +131,16 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     # PHASE 3: MULTI-TASK JOINT TRAINING  (early-stop on val, report on test)
     # ------------------------------------------------------------------
+    method = CONFIG["loss_weighting_method"]
+    if method == "uncertainty":
+        loss_weighter = UncertaintyLoss()
+    elif method == "gradnorm":
+        loss_weighter = GradNormBalancer(CONFIG["gradnorm_alpha"], CONFIG["gradnorm_weight_lr"])
+    else:
+        loss_weighter = StaticWeighter(0.5, 0.5)
+
     model_mt, results, multitask_bin_acc, multitask_trans_acc = run_multimodal_training(
-        mt_train_loader, mt_val_loader, mt_test_loader, test_df, val_tfm
+        mt_train_loader, mt_val_loader, mt_test_loader, test_df, val_tfm, loss_weighter=loss_weighter
     )
 
     # ------------------------------------------------------------------

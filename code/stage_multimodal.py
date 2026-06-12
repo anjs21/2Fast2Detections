@@ -19,11 +19,16 @@ from evaluation import (
 )
 
 
-def run_multimodal_training(mt_train_loader, mt_val_loader, mt_test_loader, test_df, val_tfm):
+def run_multimodal_training(mt_train_loader, mt_val_loader, mt_test_loader, test_df, val_tfm, loss_weighter=None):
     """
     Train and evaluate the multi-task joint model.
 
     Fit on train, early-stop/select on val, and report on the held-out test set.
+
+    Args:
+        loss_weighter: StaticWeighter, UncertaintyLoss, or GradNormBalancer instance.
+                        If None, defaults to StaticWeighter(0.5, 0.5).
+
 
     Returns:
         model_mt: Trained multi-task model
@@ -40,9 +45,11 @@ def run_multimodal_training(mt_train_loader, mt_val_loader, mt_test_loader, test
         trainable_backbone_stages=CONFIG["trainable_backbone_stages"],
     ).to(CONFIG["device"])
     model_mt, logger_mt = train_multitask_model(
-        model_mt, mt_train_loader, mt_val_loader, CONFIG, w1=0.5, w2=0.5, tag="multitask_equal"
+        model_mt, mt_train_loader, mt_val_loader, CONFIG, loss_weighter=loss_weighter, tag="multitask_equal"
     )
-    plot_training_curves(logger_mt, "Multi-Task Joint Training (w1=0.5, w2=0.5)",
+    
+    method_name = type(loss_weighter).__name__ if loss_weighter is not None else "StaticWeighter"
+    plot_training_curves(logger_mt, f"Multi-Task Joint Training ({method_name})",
                          "curves_multitask.png")
 
     # Final evaluation on the held-out TEST set
