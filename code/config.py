@@ -70,7 +70,7 @@ CONFIG = {
     # trainable_backbone_stages=0 (frozen encoder + trainable heads, the
     # UniversalFakeDetect recipe). CLIP's strength is the binary task; expect the
     # transform head to be weaker with a frozen semantic encoder.
-    "backbone": "clip_vit_l14",
+    "backbone": "resnet50",
     "num_workers": 4,
     "amp": True,                 # Mixed-precision training (no-op on CPU)
     "device": "cuda" if torch.cuda.is_available() else "cpu",
@@ -137,7 +137,7 @@ def download_train_val_data():
             print("Top level folders in data directory:", os.listdir(DATA_DIR))
         return
 
-    tar_path = os.path.join(PROJECT_ROOT, "train_val.tar.gz")
+    tar_path = os.path.join(DATA_DIR, "train_val.tar.gz")
     if not os.path.exists(tar_path):
         download_url(
             "https://zenodo.org/api/records/14963880/files/RRDataset_original_train_val.tar.gz/content",
@@ -158,7 +158,7 @@ def download_test_data():
     Optimized: skips if already extracted, or downloads to disk first to avoid slow socket streaming.
     """
     test_subset_dir = os.path.join(DATA_DIR, "test_subset")
-    local_tar_path = os.path.join(PROJECT_ROOT, "test_subset.tar.gz")
+    local_tar_path = os.path.join(DATA_DIR, "test_subset.tar.gz")
 
     # 1. Quick Check: Are the files already extracted from a previous run?
     if os.path.exists(test_subset_dir):
