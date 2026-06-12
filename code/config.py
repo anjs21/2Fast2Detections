@@ -28,11 +28,20 @@ if torch.cuda.is_available():
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 KAGGLE_MODE = os.path.exists("/kaggle")
-DATA_DIR = "/kaggle/working/data" if KAGGLE_MODE else os.path.join(PROJECT_ROOT, "data")
+if KAGGLE_MODE:
+    DATA_DIR = "/kaggle/working/data"
+    RESULTS_DIR = "/kaggle/working/results"
+    CHECKPOINTS_DIR = "/kaggle/working/checkpoints"
+else:
+    DATA_DIR = "/leonardo_scratch/large/userexternal/jbiebuyc/CV/data"
+    RESULTS_DIR = os.path.join(PROJECT_ROOT, "results_joey_aide_gradnorm")
+    CHECKPOINTS_DIR = os.path.join("/leonardo_scratch/large/userexternal/jbiebuyc/CV/checkpoints_joey_aide_gradnorm")
+
 METADATA_TRAIN_VAL_CSV = "/kaggle/working/metadata_train_val.csv" if KAGGLE_MODE else os.path.join(PROJECT_ROOT, "metadata_train_val.csv")
 METADATA_TEST_CSV = "/kaggle/working/metadata_test.csv" if KAGGLE_MODE else os.path.join(PROJECT_ROOT, "metadata_test.csv")
-RESULTS_DIR = "/kaggle/working/results" if KAGGLE_MODE else os.path.join(PROJECT_ROOT, "results")
-CHECKPOINTS_DIR = "/kaggle/working/checkpoints" if KAGGLE_MODE else os.path.join(PROJECT_ROOT, "checkpoints")
+
+os.makedirs(RESULTS_DIR, exist_ok=True)
+os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
 
 # Source roots for the leak-free split (see data.build_splits):
 #   - "original" images come WITH a predefined train/val split (honored as-is)
@@ -42,9 +51,6 @@ ORIGINAL_ROOT = os.path.join(DATA_DIR, "RRDataset_original_train_val")
 ORIGINAL_TRAIN_DIR = os.path.join(ORIGINAL_ROOT, "train")
 ORIGINAL_VAL_DIR = os.path.join(ORIGINAL_ROOT, "val")
 TEST_SUBSET_DIR = os.path.join(DATA_DIR, "test_subset")
-
-os.makedirs(RESULTS_DIR, exist_ok=True)
-os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
 
 CONFIG = {
     "seed": 42,
