@@ -45,21 +45,22 @@ def run_ablation_study(train_loader, val_loader):
     Returns:
         ablation_df: DataFrame with results for each weight configuration
     """
-    # weight_configs = [
-    #     (1.0, 0.0, "binary_only"),
-    #     (0.75, 0.25, "binary_dominant"),
-    #     (0.5, 0.5, "equal"),
-    #     (0.25, 0.75, "transform_dominant"),
-    #     (0.0, 1.0, "transform_only"),
-    # ]
-
     weight_configs = [
-        (0.2, 0.8, "fine_sweep1"),
-        (0.25, 0.75, "fine_sweep2"),
-        (0.30, 0.70, "fine_sweep3"),
-        (0.35, 0.65, "fine_sweep4"),
-        (0.4, 0.6, "fine_sweep5"),
+        (1.0, 0.0, "binary_only"),
+        (0.75, 0.25, "binary_dominant"),
+        (0.5, 0.5, "equal"),
+        (0.25, 0.75, "transform_dominant"),
+        (0.0, 1.0, "transform_only"),
     ]
+
+    # weight_configs = [
+    #     (0.2, 0.8, "fine_sweep1"),
+    #     (0.25, 0.75, "fine_sweep2"),
+    #     (0.30, 0.70, "fine_sweep3"),
+    #     (0.35, 0.65, "fine_sweep4"),
+    #     (0.4, 0.6, "fine_sweep5"),
+    #     (0.5,0.5, "fine_sweep6")
+    # ]
 
     ablation_results = []
 
@@ -119,8 +120,12 @@ def run_ablation_study(train_loader, val_loader):
     x = np.arange(len(ablation_df))
     width = 0.35
 
-    ax.bar(x - width/2, ablation_df["val_acc_bin"] * 100, width, label="Real/Fake Acc", color="#4C72B0")
-    ax.bar(x + width/2, ablation_df["val_acc_trans"] * 100, width, label="Transform Acc", color="#DD8452")
+    bars1 = ax.bar(x - width/2, ablation_df["val_acc_bin"] * 100, width, label="Real/Fake Acc", color="#4C72B0")
+    bars2 = ax.bar(x + width/2, ablation_df["val_acc_trans"] * 100, width, label="Transform Acc", color="#DD8452")
+
+    # Add value labels on bars
+    ax.bar_label(bars1, fmt='%.1f%%', padding=3, fontsize=9)
+    ax.bar_label(bars2, fmt='%.1f%%', padding=3, fontsize=9)
 
     ax.set_xlabel("Weight Configuration")
     ax.set_ylabel("Validation Accuracy (%)")

@@ -26,10 +26,46 @@
   },
   "evaluation_split": "test",
   "unimodal_binary_test_acc": 0.9156279961649089,
-  "unimodal_transform_test_acc": 0.9827420901246404,
+  "unimodal_transform_test_acc": 0.9856184084372004,
   "multitask_binary_test_acc": 0.9242569511025887,
   "multitask_transform_test_acc": 0.9846596356663471,
-  "ablation_results": [],
+  "ablation_results": [
+    {
+      "w1": 1.0,
+      "w2": 0.0,
+      "label": "binary_only",
+      "val_acc_bin": 0.907088122605364,
+      "val_acc_trans": 0.35919540229885055
+    },
+    {
+      "w1": 0.75,
+      "w2": 0.25,
+      "label": "binary_dominant",
+      "val_acc_bin": 0.9032567049808429,
+      "val_acc_trans": 0.9741379310344828
+    },
+    {
+      "w1": 0.5,
+      "w2": 0.5,
+      "label": "equal",
+      "val_acc_bin": 0.9137931034482759,
+      "val_acc_trans": 0.9789272030651341
+    },
+    {
+      "w1": 0.25,
+      "w2": 0.75,
+      "label": "transform_dominant",
+      "val_acc_bin": 0.9090038314176245,
+      "val_acc_trans": 0.9846743295019157
+    },
+    {
+      "w1": 0.0,
+      "w2": 1.0,
+      "label": "transform_only",
+      "val_acc_bin": 0.5296934865900383,
+      "val_acc_trans": 0.9731800766283525
+    }
+  ],
   "per_transformation_breakdown": [
     {
       "transformation": "original",
@@ -115,5 +151,5 @@
       "transform_acc": 0.9923664122137404
     }
   ],
-  "total_training_time_minutes": 11.675002539157868
+  "total_training_time_minutes": 32.71934295495351
 }

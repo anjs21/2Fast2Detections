@@ -55,9 +55,9 @@ def run_multimodal_training(mt_train_loader, mt_val_loader, mt_test_loader, test
             transform_head_cfg=CONFIG.get("transform_head"),
         ).to(CONFIG["device"])
     model_mt, logger_mt = train_multitask_model(
-        model_mt, mt_train_loader, mt_val_loader, CONFIG, w1=0.3, w2=0.7, tag="multitask_equal"
+        model_mt, mt_train_loader, mt_val_loader, CONFIG, w1=CONFIG["binary_weight"], w2=1-CONFIG["binary_weight"], tag="multitask_equal"
     )
-    plot_training_curves(logger_mt, "Multi-Task Joint Training (w1=0.5, w2=0.5)",
+    plot_training_curves(logger_mt, "Multi-Task Joint Training (w1={:.2f}, w2={:.2f})".format(CONFIG["binary_weight"], 1-CONFIG["binary_weight"]),
                          "curves_multitask.png")
 
     # Final evaluation on the held-out TEST set

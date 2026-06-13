@@ -206,11 +206,9 @@ def per_transformation_breakdown(results, val_df):
     ax.set_ylim(0, 105)
 
     # Add value labels on bars
-    for bars in [bars1, bars2, bars3]:
-        for bar in bars:
-            h = bar.get_height()
-            ax.annotate(f'{h:.1f}%', xy=(bar.get_x() + bar.get_width() / 2, h),
-                        xytext=(0, 3), textcoords="offset points", ha='center', fontsize=8)
+    ax.bar_label(bars1, fmt='%.1f%%', padding=3, fontsize=8)
+    ax.bar_label(bars2, fmt='%.1f%%', padding=3, fontsize=8)
+    ax.bar_label(bars3, fmt='%.1f%%', padding=3, fontsize=8)
 
     plt.tight_layout()
     plt.savefig(os.path.join(RESULTS_DIR, "per_transformation_breakdown.png"), dpi=150, bbox_inches="tight")
@@ -492,11 +490,17 @@ def print_comparative_summary(unimodal_bin_acc, unimodal_trans_acc,
     bars1 = ax.bar(x - width/2, bin_accs, width, label="Real/Fake Acc", color="#4C72B0")
     bars2 = ax.bar(x + width/2, trans_accs, width, label="Transform Acc", color="#DD8452")
 
+    # Add value labels on bars, showing only non-zero validation accuracy values
+    labels1 = [f'{val:.1f}%' if val > 0 else '' for val in bin_accs]
+    labels2 = [f'{val:.1f}%' if val > 0 else '' for val in trans_accs]
+    ax.bar_label(bars1, labels=labels1, padding=3, fontsize=9)
+    ax.bar_label(bars2, labels=labels2, padding=3, fontsize=9)
+
     ax.set_ylabel("Validation Accuracy (%)")
     ax.set_title("Unimodal Baselines vs Multi-Task Model")
     ax.set_xticks(x)
     ax.set_xticklabels(models_list)
-    ax.legend()
+    ax.legend(loc="lower right")
     ax.set_ylim(0, 105)
     plt.tight_layout()
     plt.savefig(os.path.join(RESULTS_DIR, "unimodal_vs_multitask.png"), dpi=150, bbox_inches="tight")

@@ -54,6 +54,7 @@ CONFIG = {
     "lr": 1e-4,
     "weight_decay": 1e-4,
     "subset_per_class": 1000,
+    "binary_weight": 0.3,
     "val_frac": 0.15,            # Group-aware split: fraction of source scenes held out for val
     "test_frac": 0.15,           # Group-aware split: fraction of source scenes held out for test
     "patience": 3,               # Early stopping patience
