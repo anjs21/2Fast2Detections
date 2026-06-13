@@ -43,7 +43,7 @@ from config import (
 )
 from data import (
     build_splits, MultiTaskDataset, SingleTaskDataset,
-    get_train_transform, get_val_transform,
+    get_train_transform, get_val_transform, get_tta_transform,
 )
 from stage_unimodal import run_unimodal_baselines
 from stage_multimodal import run_multimodal_training, run_comparison_and_analysis
@@ -55,6 +55,7 @@ if __name__ == "__main__":
     start_time = time.time()
 
     print(f"Traininf with {CONFIG['backbone']} backbone with {CONFIG['trainable_backbone_stages']} trainable backbone stages")
+    print(f"[seed] CONFIG seed = {CONFIG['seed']}")
 
     # ------------------------------------------------------------------
     # PHASE 1: DATA PREPARATION
@@ -101,6 +102,13 @@ if __name__ == "__main__":
     # 1g. Create DataLoaders
     train_tfm = get_train_transform(CONFIG["img_size"], CONFIG["backbone"])
     val_tfm = get_val_transform(CONFIG["img_size"], CONFIG["backbone"])
+    # Final test evaluation averages softmax over multiple deterministic crops
+    # (TTA); val keeps the fast single-crop transform for early stopping.
+    if CONFIG.get("tta_crops", 1) > 1:
+        test_tfm = get_tta_transform(CONFIG["img_size"], CONFIG["backbone"], CONFIG["tta_crops"])
+        print(f"Test-time augmentation: {CONFIG['tta_crops']} crops per test image")
+    else:
+        test_tfm = val_tfm
 
     def _loader(dataset, shuffle):
         return DataLoader(dataset, batch_size=CONFIG["batch_size"], shuffle=shuffle,
@@ -109,15 +117,15 @@ if __name__ == "__main__":
     # Multi-task dataloaders
     mt_train_loader = _loader(MultiTaskDataset(train_df, transform=train_tfm), True)
     mt_val_loader = _loader(MultiTaskDataset(val_df, transform=val_tfm), False)
-    mt_test_loader = _loader(MultiTaskDataset(test_df, transform=val_tfm), False)
+    mt_test_loader = _loader(MultiTaskDataset(test_df, transform=test_tfm), False)
 
     # Single-task dataloaders (for unimodal baselines)
     st_bin_train = _loader(SingleTaskDataset(train_df, "binary", train_tfm), True)
     st_bin_val = _loader(SingleTaskDataset(val_df, "binary", val_tfm), False)
-    st_bin_test = _loader(SingleTaskDataset(test_df, "binary", val_tfm), False)
+    st_bin_test = _loader(SingleTaskDataset(test_df, "binary", test_tfm), False)
     st_trans_train = _loader(SingleTaskDataset(train_df, "transform", train_tfm), True)
     st_trans_val = _loader(SingleTaskDataset(val_df, "transform", val_tfm), False)
-    st_trans_test = _loader(SingleTaskDataset(test_df, "transform", val_tfm), False)
+    st_trans_test = _loader(SingleTaskDataset(test_df, "transform", test_tfm), False)
 
     # ------------------------------------------------------------------
     # PHASE 2: UNIMODAL BASELINES  (fit on train, early-stop on val, report on test)
@@ -126,6 +134,7 @@ if __name__ == "__main__":
         st_bin_train, st_bin_val, st_bin_test,
         st_trans_train, st_trans_val, st_trans_test
     )
+    # unimodal_bin_acc, unimodal_trans_acc = None, None
 
     # ------------------------------------------------------------------
     # PHASE 3: MULTI-TASK JOINT TRAINING  (early-stop on val, report on test)
@@ -133,6 +142,7 @@ if __name__ == "__main__":
     model_mt, results, multitask_bin_acc, multitask_trans_acc = run_multimodal_training(
         mt_train_loader, mt_val_loader, mt_test_loader, test_df, val_tfm
     )
+    # model_mt, results, multitask_bin_acc, multitask_trans_acc = None, None, None, None
 
     # ------------------------------------------------------------------
     # PHASES 4-6, 8: COMPARISON, ANALYSIS, VISUAL INFERENCE  (on held-out test)
@@ -142,16 +152,17 @@ if __name__ == "__main__":
         unimodal_bin_acc, unimodal_trans_acc,
         multitask_bin_acc, multitask_trans_acc
     )
+    # comparison_df, breakdown_df, trace_df = None, None, None
 
-    # # ------------------------------------------------------------------
-    # # PHASE 7: ABLATION STUDY (disabled for now)
-    # # ------------------------------------------------------------------
-    # print("\n" + "=" * 60)
-    # print("PHASE 7: ABLATION STUDY (Loss Weight Sweep)")
-    # print("=" * 60)
+    # ------------------------------------------------------------------
+    # PHASE 7: ABLATION STUDY (Loss Weight Sweep)
+    # ------------------------------------------------------------------
+    print("\n" + "=" * 60)
+    print("PHASE 7: ABLATION STUDY (Loss Weight Sweep)")
+    print("=" * 60)
 
     # ablation_df = run_ablation_study(mt_train_loader, mt_val_loader)
-    ablation_df = None  # PHASE 7 disabled; save_results handles a None ablation
+    ablation_df = None
 
     # ------------------------------------------------------------------
     # PHASE 9: SAVE FINAL RESULTS

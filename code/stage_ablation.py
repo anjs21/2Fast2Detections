@@ -12,8 +12,29 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 
 from config import CONFIG, RESULTS_DIR
-from models import MultiTaskModel
+from models import MultiTaskModel, DualStreamMultiTaskModel
 from training import train_multitask_model, evaluate_multitask
+
+
+def _build_multitask_model():
+    """Same architecture selection as stage_multimodal, so the ablation sweeps
+    the identical model the main multi-task results use."""
+    if CONFIG.get("dual_stream"):
+        return DualStreamMultiTaskModel(
+            rgb_backbone_name=CONFIG["backbone"],
+            noise_backbone_name=CONFIG.get("noise_backbone", "resnet18"),
+            trainable_backbone_stages=CONFIG["trainable_backbone_stages"],
+            dropout=CONFIG["dropout"],
+            binary_head_cfg=CONFIG.get("binary_head"),
+            transform_head_cfg=CONFIG.get("transform_head"),
+        ).to(CONFIG["device"])
+    return MultiTaskModel(
+        backbone_name=CONFIG["backbone"],
+        trainable_backbone_stages=CONFIG["trainable_backbone_stages"],
+        dropout=CONFIG["dropout"],
+        binary_head_cfg=CONFIG.get("binary_head"),
+        transform_head_cfg=CONFIG.get("transform_head"),
+    ).to(CONFIG["device"])
 
 
 def run_ablation_study(train_loader, val_loader):
@@ -24,12 +45,20 @@ def run_ablation_study(train_loader, val_loader):
     Returns:
         ablation_df: DataFrame with results for each weight configuration
     """
+    # weight_configs = [
+    #     (1.0, 0.0, "binary_only"),
+    #     (0.75, 0.25, "binary_dominant"),
+    #     (0.5, 0.5, "equal"),
+    #     (0.25, 0.75, "transform_dominant"),
+    #     (0.0, 1.0, "transform_only"),
+    # ]
+
     weight_configs = [
-        (1.0, 0.0, "binary_only"),
-        (0.75, 0.25, "binary_dominant"),
-        (0.5, 0.5, "equal"),
-        (0.25, 0.75, "transform_dominant"),
-        (0.0, 1.0, "transform_only"),
+        (0.2, 0.8, "fine_sweep1"),
+        (0.25, 0.75, "fine_sweep2"),
+        (0.30, 0.70, "fine_sweep3"),
+        (0.35, 0.65, "fine_sweep4"),
+        (0.4, 0.6, "fine_sweep5"),
     ]
 
     ablation_results = []
@@ -41,10 +70,7 @@ def run_ablation_study(train_loader, val_loader):
     for w1, w2, label in weight_configs:
         print(f"\n--- Config: w1={w1}, w2={w2} ({label}) ---")
 
-        model = MultiTaskModel(
-            backbone_name=CONFIG["backbone"],
-            trainable_backbone_stages=CONFIG["trainable_backbone_stages"],
-        ).to(CONFIG["device"])
+        model = _build_multitask_model()
         model, logger = train_multitask_model(
             model, train_loader, val_loader, CONFIG, w1=w1, w2=w2, tag=f"ablation_{label}"
         )

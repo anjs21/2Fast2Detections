@@ -6,7 +6,7 @@ evaluates it, and compares against unimodal baselines.
 """
 
 from config import CONFIG
-from models import MultiTaskModel
+from models import MultiTaskModel, DualStreamMultiTaskModel
 from training import train_multitask_model
 from evaluation import (
     collect_multitask_predictions,
@@ -35,12 +35,27 @@ def run_multimodal_training(mt_train_loader, mt_val_loader, mt_test_loader, test
     print("PHASE 3: MULTI-TASK JOINT TRAINING")
     print("=" * 60)
 
-    model_mt = MultiTaskModel(
-        backbone_name=CONFIG["backbone"],
-        trainable_backbone_stages=CONFIG["trainable_backbone_stages"],
-    ).to(CONFIG["device"])
+    if CONFIG.get("dual_stream"):
+        print(f"[model] Dual-stream: RGB={CONFIG['backbone']} + Bayar noise stream"
+              f"={CONFIG.get('noise_backbone', 'resnet18')}")
+        model_mt = DualStreamMultiTaskModel(
+            rgb_backbone_name=CONFIG["backbone"],
+            noise_backbone_name=CONFIG.get("noise_backbone", "resnet18"),
+            trainable_backbone_stages=CONFIG["trainable_backbone_stages"],
+            dropout=CONFIG["dropout"],
+            binary_head_cfg=CONFIG.get("binary_head"),
+            transform_head_cfg=CONFIG.get("transform_head"),
+        ).to(CONFIG["device"])
+    else:
+        model_mt = MultiTaskModel(
+            backbone_name=CONFIG["backbone"],
+            trainable_backbone_stages=CONFIG["trainable_backbone_stages"],
+            dropout=CONFIG["dropout"],
+            binary_head_cfg=CONFIG.get("binary_head"),
+            transform_head_cfg=CONFIG.get("transform_head"),
+        ).to(CONFIG["device"])
     model_mt, logger_mt = train_multitask_model(
-        model_mt, mt_train_loader, mt_val_loader, CONFIG, w1=0.5, w2=0.5, tag="multitask_equal"
+        model_mt, mt_train_loader, mt_val_loader, CONFIG, w1=0.3, w2=0.7, tag="multitask_equal"
     )
     plot_training_curves(logger_mt, "Multi-Task Joint Training (w1=0.5, w2=0.5)",
                          "curves_multitask.png")

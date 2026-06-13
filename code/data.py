@@ -390,3 +390,23 @@ def get_val_transform(img_size, backbone="resnet50"):
         transforms.ToTensor(),
         transforms.Normalize(mean=mean, std=std),
     ])
+
+
+def get_tta_transform(img_size, backbone="resnet50", n_crops=5):
+    """Multi-crop TTA transform for the final test evaluation.
+
+    A single 224 center crop of a ~680px image discards >90% of its pixels.
+    This returns a deterministic stack of native-resolution crops — 4 corners +
+    center (FiveCrop), or those plus horizontal flips (TenCrop when n_crops>=10)
+    — as a [n_crops, 3, img_size, img_size] tensor. Prediction collection
+    averages the softmax over crops (see evaluation.collect_*_predictions).
+    """
+    mean, std = normalization_for(backbone)
+    to_tensor = transforms.ToTensor()
+    normalize = transforms.Normalize(mean=mean, std=std)
+    cropper = transforms.TenCrop(img_size) if n_crops >= 10 else transforms.FiveCrop(img_size)
+    return transforms.Compose([
+        ResizeIfSmaller(img_size),
+        cropper,
+        transforms.Lambda(lambda crops: torch.stack([normalize(to_tensor(c)) for c in crops])),
+    ])

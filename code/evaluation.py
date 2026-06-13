@@ -21,7 +21,12 @@ from config import (
 # =============================================================================
 @torch.no_grad()
 def collect_multitask_predictions(model, loader, device):
-    """Collect all predictions and labels from a multi-task model."""
+    """Collect all predictions and labels from a multi-task model.
+
+    Supports multi-crop TTA batches: if images arrive as [B, K, C, H, W]
+    (see data.get_tta_transform), the K crops are run in one forward and the
+    softmax is averaged over crops before the argmax.
+    """
     model.eval()
     all_preds_bin, all_labels_bin = [], []
     all_preds_trans, all_labels_trans = [], []
@@ -29,15 +34,22 @@ def collect_multitask_predictions(model, loader, device):
 
     for images, labels_bin, labels_trans in loader:
         images = images.to(device)
-        out_bin, out_trans = model(images)
+        if images.dim() == 5:  # [B, K, C, H, W] TTA crops
+            b, k = images.shape[:2]
+            out_bin, out_trans = model(images.flatten(0, 1))
+            probs_bin = torch.softmax(out_bin, dim=1).view(b, k, -1).mean(dim=1)
+            probs_trans = torch.softmax(out_trans, dim=1).view(b, k, -1).mean(dim=1)
+        else:
+            out_bin, out_trans = model(images)
+            probs_bin = torch.softmax(out_bin, dim=1)
+            probs_trans = torch.softmax(out_trans, dim=1)
 
-        probs_bin = torch.softmax(out_bin, dim=1)
         all_probs_bin.extend(probs_bin.cpu().numpy())
 
-        all_preds_bin.extend(torch.max(out_bin, 1)[1].cpu().numpy())
+        all_preds_bin.extend(torch.max(probs_bin, 1)[1].cpu().numpy())
         all_labels_bin.extend(labels_bin.numpy())
 
-        all_preds_trans.extend(torch.max(out_trans, 1)[1].cpu().numpy())
+        all_preds_trans.extend(torch.max(probs_trans, 1)[1].cpu().numpy())
         all_labels_trans.extend(labels_trans.numpy())
 
     return {
@@ -51,14 +63,23 @@ def collect_multitask_predictions(model, loader, device):
 
 @torch.no_grad()
 def collect_singletask_predictions(model, loader, device):
-    """Collect all predictions and labels from a single-task model."""
+    """Collect all predictions and labels from a single-task model.
+
+    Supports multi-crop TTA batches ([B, K, C, H, W]) by averaging the softmax
+    over the K crops, as in collect_multitask_predictions.
+    """
     model.eval()
     all_preds, all_labels = [], []
 
     for images, labels in loader:
         images = images.to(device)
-        out = model(images)
-        all_preds.extend(torch.max(out, 1)[1].cpu().numpy())
+        if images.dim() == 5:  # [B, K, C, H, W] TTA crops
+            b, k = images.shape[:2]
+            out = model(images.flatten(0, 1))
+            probs = torch.softmax(out, dim=1).view(b, k, -1).mean(dim=1)
+        else:
+            probs = torch.softmax(model(images), dim=1)
+        all_preds.extend(torch.max(probs, 1)[1].cpu().numpy())
         all_labels.extend(labels.numpy())
 
     return np.array(all_preds), np.array(all_labels)

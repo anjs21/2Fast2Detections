@@ -9,6 +9,7 @@ the trailing stages and the task heads are trained (see `trainable_backbone_stag
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torchvision import models
 
 
@@ -108,32 +109,58 @@ def apply_partial_finetune(backbone, name, trainable_stages):
             p.requires_grad = True
 
 
-def _make_head(num_features, num_classes, dropout):
-    return nn.Sequential(
-        nn.Dropout(dropout),
-        nn.Linear(num_features, 256),
-        nn.ReLU(),
-        nn.Dropout(dropout / 2),
-        nn.Linear(256, num_classes),
-    )
+def _make_head(num_features, num_classes, hidden_dims=(256,), dropout=0.3):
+    """Build an MLP classification head.
+
+    hidden_dims: widths of the hidden layers; () gives a single linear layer
+        (a linear probe). The default (256,) reproduces the original head.
+    dropout: applied before the first hidden layer, dropout/2 before each
+        subsequent linear layer.
+
+    The two task heads can be configured independently (see MultiTaskModel's
+    binary_head_cfg / transform_head_cfg), e.g. a deeper/wider binary head and a
+    shallow transform head.
+    """
+    layers = []
+    in_dim = num_features
+    for i, h in enumerate(hidden_dims):
+        layers += [
+            nn.Dropout(dropout if i == 0 else dropout / 2),
+            nn.Linear(in_dim, h),
+            nn.ReLU(),
+        ]
+        in_dim = h
+    layers += [
+        nn.Dropout(dropout / 2 if hidden_dims else dropout),
+        nn.Linear(in_dim, num_classes),
+    ]
+    return nn.Sequential(*layers)
 
 
 class MultiTaskModel(nn.Module):
     """Shared backbone with two classification heads (binary + transformation)."""
 
     def __init__(self, backbone_name="resnet50", num_binary=2, num_transform=3,
-                 dropout=0.3, trainable_backbone_stages=None):
+                 dropout=0.3, trainable_backbone_stages=None,
+                 binary_head_cfg=None, transform_head_cfg=None):
         super().__init__()
         self.backbone, num_features = get_backbone(backbone_name)
         apply_partial_finetune(self.backbone, backbone_name, trainable_backbone_stages)
 
+        # Per-head config overrides the global dropout; both default to (256,)/dropout.
+        bcfg = {"hidden_dims": (256,), "dropout": dropout, **(binary_head_cfg or {})}
+        tcfg = {"hidden_dims": (256,), "dropout": dropout, **(transform_head_cfg or {})}
         # Task Head 1: Binary (Real vs Fake)
-        self.binary_head = _make_head(num_features, num_binary, dropout)
+        self.binary_head = _make_head(num_features, num_binary, **bcfg)
         # Task Head 2: Transformation type (Original / Transmitted / Redigitalized)
-        self.transform_head = _make_head(num_features, num_transform, dropout)
+        self.transform_head = _make_head(num_features, num_transform, **tcfg)
+
+    def forward_features(self, x):
+        """Pre-head feature vector (the input the two heads share)."""
+        return self.backbone(x)
 
     def forward(self, x):
-        features = self.backbone(x)
+        features = self.forward_features(x)
         out_bin = self.binary_head(features)
         out_trans = self.transform_head(features)
         return out_bin, out_trans
@@ -143,12 +170,110 @@ class SingleTaskModel(nn.Module):
     """Single-task model for unimodal baselines."""
 
     def __init__(self, backbone_name="resnet50", num_classes=2, dropout=0.3,
-                 trainable_backbone_stages=None):
+                 trainable_backbone_stages=None, head_cfg=None):
         super().__init__()
         self.backbone, num_features = get_backbone(backbone_name)
         apply_partial_finetune(self.backbone, backbone_name, trainable_backbone_stages)
-        self.head = _make_head(num_features, num_classes, dropout)
+        cfg = {"hidden_dims": (256,), "dropout": dropout, **(head_cfg or {})}
+        self.head = _make_head(num_features, num_classes, **cfg)
 
     def forward(self, x):
         features = self.backbone(x)
         return self.head(features)
+
+
+class BayarConv2d(nn.Module):
+    """Bayar & Stamm (2016) constrained high-pass convolution.
+
+    A learnable first layer constrained to be a prediction-error / residual
+    filter: each kernel's center weight is fixed to -1 and its remaining weights
+    are renormalized to sum to +1 (so the kernel sums to 0). This suppresses image
+    content and exposes the high-frequency noise/generation fingerprint, which is
+    where the real-vs-AI signal lives. The constraint is re-projected every forward.
+    """
+
+    def __init__(self, in_channels=3, out_channels=3, kernel_size=5):
+        super().__init__()
+        self.kernel_size = kernel_size
+        self.weight = nn.Parameter(torch.randn(out_channels, in_channels, kernel_size, kernel_size))
+
+    def _project(self):
+        with torch.no_grad():
+            c = self.kernel_size // 2
+            w = self.weight
+            w[:, :, c, c] = 0.0
+            s = w.sum(dim=(2, 3), keepdim=True)
+            s = torch.where(s.abs() < 1e-6, torch.ones_like(s), s)  # guard div-by-~0
+            w /= s                                                  # non-center weights sum to 1
+            w[:, :, c, c] = -1.0                                    # -> kernel sums to 0 (high-pass)
+
+    def forward(self, x):
+        self._project()
+        return F.conv2d(x, self.weight, padding=self.kernel_size // 2)
+
+
+class DualStreamMultiTaskModel(nn.Module):
+    """RGB stream + Bayar noise-residual stream, fused into the two task heads.
+
+    Stream A: the usual pretrained RGB backbone (semantic + coarse cues).
+    Stream B: a Bayar constrained high-pass -> small CNN on the residual, which
+    captures the high-frequency generation/compression fingerprint that the RGB
+    stream tends to discard (helps binary on transmitted/redigitalized images).
+    The pooled features are concatenated and fed to both heads.
+
+    `trainable_backbone_stages` controls partial fine-tuning of the RGB backbone
+    only; the (small) noise backbone and the Bayar layer are always fully trained.
+    """
+
+    def __init__(self, rgb_backbone_name="convnext_tiny", noise_backbone_name="resnet18",
+                 num_binary=2, num_transform=3, dropout=0.3, trainable_backbone_stages=None,
+                 binary_head_cfg=None, transform_head_cfg=None):
+        super().__init__()
+        self.rgb_backbone, d_rgb = get_backbone(rgb_backbone_name)
+        apply_partial_finetune(self.rgb_backbone, rgb_backbone_name, trainable_backbone_stages)
+
+        self.bayar = BayarConv2d(3, 3, kernel_size=5)
+        self.noise_backbone, d_noise = get_backbone(noise_backbone_name)
+
+        fused = d_rgb + d_noise
+        # Per-head config overrides the global dropout; both default to (256,)/dropout.
+        bcfg = {"hidden_dims": (256,), "dropout": dropout, **(binary_head_cfg or {})}
+        tcfg = {"hidden_dims": (256,), "dropout": dropout, **(transform_head_cfg or {})}
+        self.binary_head = _make_head(fused, num_binary, **bcfg)
+        self.transform_head = _make_head(fused, num_transform, **tcfg)
+
+    def forward_features(self, x):
+        """Fused RGB + noise-residual feature vector (the input the two heads share)."""
+        f_rgb = self.rgb_backbone(x)
+        f_noise = self.noise_backbone(self.bayar(x))
+        return torch.cat([f_rgb, f_noise], dim=1)
+
+    def forward(self, x):
+        feat = self.forward_features(x)
+        return self.binary_head(feat), self.transform_head(feat)
+
+
+class DualStreamSingleTaskModel(nn.Module):
+    """Single-task counterpart of DualStreamMultiTaskModel (one fused head).
+
+    Used for the unimodal baselines when dual_stream is enabled, so the
+    joint-vs-unimodal comparison holds the architecture fixed and isolates the
+    effect of multi-task training alone.
+    """
+
+    def __init__(self, rgb_backbone_name="convnext_tiny", noise_backbone_name="resnet18",
+                 num_classes=2, dropout=0.3, trainable_backbone_stages=None, head_cfg=None):
+        super().__init__()
+        self.rgb_backbone, d_rgb = get_backbone(rgb_backbone_name)
+        apply_partial_finetune(self.rgb_backbone, rgb_backbone_name, trainable_backbone_stages)
+
+        self.bayar = BayarConv2d(3, 3, kernel_size=5)
+        self.noise_backbone, d_noise = get_backbone(noise_backbone_name)
+
+        cfg = {"hidden_dims": (256,), "dropout": dropout, **(head_cfg or {})}
+        self.head = _make_head(d_rgb + d_noise, num_classes, **cfg)
+
+    def forward(self, x):
+        f_rgb = self.rgb_backbone(x)
+        f_noise = self.noise_backbone(self.bayar(x))
+        return self.head(torch.cat([f_rgb, f_noise], dim=1))

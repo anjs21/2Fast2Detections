@@ -47,7 +47,7 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
 
 CONFIG = {
-    "seed": 42,
+    "seed": int(os.environ.get("SEED", 42)),  # override per run: SEED=123 sbatch ...
     "img_size": 224,
     "batch_size": 32,
     "epochs": 10,
@@ -64,7 +64,7 @@ CONFIG = {
     # trainable_backbone_stages=0 (frozen encoder + trainable heads, the
     # UniversalFakeDetect recipe). CLIP's strength is the binary task; expect the
     # transform head to be weaker with a frozen semantic encoder.
-    "backbone": "clip_vit_l14",
+    "backbone": "convnext_base",
     "num_workers": 4,
     "amp": True,                 # Mixed-precision training (no-op on CPU)
     "device": "cuda" if torch.cuda.is_available() else "cpu",
@@ -74,7 +74,33 @@ CONFIG = {
     # is frozen and the two task heads are always trainable. For ResNet50 the
     # stages are layer1..layer4, so 2 => train layer3 + layer4 + heads.
     # Set to None for full fine-tuning, or 0 for a frozen-backbone linear probe.
-    "trainable_backbone_stages": 0,
+    "trainable_backbone_stages": None,
+
+    # ---- Dual-stream (RGB + Bayar noise-residual) for the multi-task model ----
+    # Adds a high-pass noise-residual stream (Bayar constrained conv -> noise_backbone)
+    # fused with the RGB backbone, targeting the high-frequency generation fingerprint
+    # to help binary on transmitted/redigitalized images. To run the dual-stream A/B:
+    #   "dual_stream": True, "backbone": "convnext_tiny", "trainable_backbone_stages": None
+    "dual_stream": True,
+    "noise_backbone": "resnet18",  # backbone for the noise-residual stream
+
+    # ---- Test-time augmentation (final test evaluation only) ----
+    # Number of deterministic crops averaged per test image: 5 = corners+center,
+    # >=10 also adds horizontal flips. 1 disables TTA (single center crop).
+    # Val (early stopping) always uses the single-crop transform for speed.
+    "tta_crops": 5,
+
+    # Global classification-head dropout, used by ALL heads (unimodal + multi-task)
+    # unless a per-head config below overrides it with its own "dropout" key.
+    # Applied before the first hidden layer (dropout/2 before later layers).
+    "dropout": 0.32,
+
+    # ---- Per-task classification heads (independent) ----
+    # Each head is an MLP: hidden_dims = hidden-layer widths ([] = linear probe).
+    # dropout is inherited from CONFIG["dropout"] unless a "dropout" key is added
+    # here to override it for that head.
+    "binary_head": {"hidden_dims": [256]},
+    "transform_head": {"hidden_dims": []},
 }
 
 # Silence warnings for clean console output

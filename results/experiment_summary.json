@@ -1,6 +1,6 @@
 {
   "config": {
-    "seed": "42",
+    "seed": "7",
     "img_size": "224",
     "batch_size": "32",
     "epochs": "10",
@@ -11,45 +11,51 @@
     "test_frac": "0.15",
     "patience": "3",
     "grad_clip_norm": "1.0",
-    "backbone": "clip_vit_l14",
+    "backbone": "convnext_base",
     "num_workers": "4",
     "amp": "True",
     "device": "cuda",
-    "trainable_backbone_stages": "0"
+    "trainable_backbone_stages": "None",
+    "dual_stream": "True",
+    "noise_backbone": "resnet18",
+    "tta_crops": "5",
+    "dropout": "0.32",
+    "binary_head": "{'hidden_dims': [256]}",
+    "transform_head": "{'hidden_dims': []}"
   },
   "evaluation_split": "test",
-  "unimodal_binary_test_acc": 0.8964525407478428,
-  "unimodal_transform_test_acc": 0.9606903163950143,
-  "multitask_binary_test_acc": 0.8964525407478428,
-  "multitask_transform_test_acc": 0.962607861936721,
+  "unimodal_binary_test_acc": 0.9311004784688995,
+  "unimodal_transform_test_acc": 0.9875598086124402,
+  "multitask_binary_test_acc": 0.9196172248803828,
+  "multitask_transform_test_acc": 0.9904306220095693,
   "ablation_results": [],
   "per_transformation_breakdown": [
     {
       "transformation": "original",
-      "overall_acc": 0.9244444444444444,
-      "real_acc": 0.9111111111111111,
-      "fake_acc": 0.9377777777777778,
+      "overall_acc": 0.96,
+      "real_acc": 0.9866666666666667,
+      "fake_acc": 0.9333333333333333,
       "n_total": 450,
       "n_real": 225,
       "n_fake": 225
     },
     {
       "transformation": "transmitted",
-      "overall_acc": 0.8980891719745223,
-      "real_acc": 0.88,
-      "fake_acc": 0.9146341463414634,
-      "n_total": 314,
+      "overall_acc": 0.8881789137380192,
+      "real_acc": 0.9666666666666667,
+      "fake_acc": 0.8159509202453987,
+      "n_total": 313,
       "n_real": 150,
-      "n_fake": 164
+      "n_fake": 163
     },
     {
       "transformation": "redigitalized",
-      "overall_acc": 0.8494623655913979,
-      "real_acc": 0.8716216216216216,
-      "fake_acc": 0.8244274809160306,
-      "n_total": 279,
-      "n_real": 148,
-      "n_fake": 131
+      "overall_acc": 0.8900709219858156,
+      "real_acc": 0.9261744966442953,
+      "fake_acc": 0.849624060150376,
+      "n_total": 282,
+      "n_real": 149,
+      "n_fake": 133
     }
   ],
   "cross_class_traces": [
@@ -57,56 +63,56 @@
       "binary_class": "real",
       "transform_type": "original",
       "n_samples": 225,
-      "binary_acc": 0.9111111111111111,
-      "binary_misclass_rate": 0.0888888888888889,
-      "avg_confidence": 0.8735337853431702,
-      "transform_acc": 0.9244444444444444
+      "binary_acc": 0.9866666666666667,
+      "binary_misclass_rate": 0.013333333333333308,
+      "avg_confidence": 0.9546016454696655,
+      "transform_acc": 0.9955555555555555
     },
     {
       "binary_class": "real",
       "transform_type": "transmitted",
       "n_samples": 150,
-      "binary_acc": 0.88,
-      "binary_misclass_rate": 0.12,
-      "avg_confidence": 0.8055379986763,
-      "transform_acc": 0.9866666666666667
+      "binary_acc": 0.9666666666666667,
+      "binary_misclass_rate": 0.033333333333333326,
+      "avg_confidence": 0.8736868500709534,
+      "transform_acc": 1.0
     },
     {
       "binary_class": "real",
       "transform_type": "redigitalized",
-      "n_samples": 148,
-      "binary_acc": 0.8716216216216216,
-      "binary_misclass_rate": 0.1283783783783784,
-      "avg_confidence": 0.7961256504058838,
-      "transform_acc": 0.9932432432432432
+      "n_samples": 149,
+      "binary_acc": 0.9261744966442953,
+      "binary_misclass_rate": 0.0738255033557047,
+      "avg_confidence": 0.8398423790931702,
+      "transform_acc": 1.0
     },
     {
       "binary_class": "fake",
       "transform_type": "original",
       "n_samples": 225,
-      "binary_acc": 0.9377777777777778,
-      "binary_misclass_rate": 0.06222222222222218,
-      "avg_confidence": 0.9084762930870056,
-      "transform_acc": 0.9733333333333334
+      "binary_acc": 0.9333333333333333,
+      "binary_misclass_rate": 0.06666666666666665,
+      "avg_confidence": 0.9115676283836365,
+      "transform_acc": 1.0
     },
     {
       "binary_class": "fake",
       "transform_type": "transmitted",
-      "n_samples": 164,
-      "binary_acc": 0.9146341463414634,
-      "binary_misclass_rate": 0.08536585365853655,
-      "avg_confidence": 0.8568450212478638,
-      "transform_acc": 0.9329268292682927
+      "n_samples": 163,
+      "binary_acc": 0.8159509202453987,
+      "binary_misclass_rate": 0.18404907975460127,
+      "avg_confidence": 0.7844131588935852,
+      "transform_acc": 0.9447852760736196
     },
     {
       "binary_class": "fake",
       "transform_type": "redigitalized",
-      "n_samples": 131,
-      "binary_acc": 0.8244274809160306,
-      "binary_misclass_rate": 0.17557251908396942,
-      "avg_confidence": 0.7906290292739868,
-      "transform_acc": 0.9847328244274809
+      "n_samples": 133,
+      "binary_acc": 0.849624060150376,
+      "binary_misclass_rate": 0.15037593984962405,
+      "avg_confidence": 0.7942000031471252,
+      "transform_acc": 1.0
     }
   ],
-  "total_training_time_minutes": 14.700131440162659
+  "total_training_time_minutes": 11.916701078414917
 }

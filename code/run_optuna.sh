@@ -8,8 +8,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
 #SBATCH --time=04:00:00
-#SBATCH --output=logs/main_%j.out
-#SBATCH --error=logs/main_%j.err
+#SBATCH --output=logs/optuna_heads_%j.out
+#SBATCH --error=logs/optuna_heads_%j.err
 
 # Create logs directory if it doesn't exist
 mkdir -p logs
@@ -44,7 +44,7 @@ nvidia-smi
 echo "============================================="
 
 # Execute the main script
-python main.py
+python optuna_heads.py --trials 60 --checkpoint ../checkpoints/final_multitask_model.pth
 
 echo "============================================="
 echo "Job finished at: $(date)"
