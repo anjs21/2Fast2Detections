@@ -1,0 +1,270 @@
+Loading python/3.11.7
+  Loading requirement: bzip2/1.0.8-ib3znej libmd/1.0.4-2km2lxx
+    libbsd/0.12.1-oocs6an expat/2.6.2-p2t4wry ncurses/6.5-svfl57u
+    readline/8.2-zeda6mx gdbm/1.23-wiol7vk libiconv/1.17-nhc3mhm
+    xz/5.4.6-xxxg42c zlib-ng/2.1.6-jkgunjc libxml2/2.10.3-zbbe7lm
+    pigz/2.8-5bwzpml zstd/1.5.6-uq5yyux tar/1.34-jgektnv gettext/0.22.5-hsxgafg
+    libffi/3.4.6-4vs4jpp libxcrypt/4.4.35-7om46b5 sqlite/3.43.2-4kl5mnp
+    util-linux-uuid/2.38.1-5achpds
+=============================================
+Job started at: Sat Jun 13 20:30:48 CEST 2026
+Running on node: 
+Current directory: /leonardo/home/userexternal/asathyan/2Fast2Detections
+Python location: /leonardo/home/userexternal/asathyan/.cvenv/bin/python
+Allocated GPU Info:
+Sat Jun 13 20:30:48 2026       
++---------------------------------------------------------------------------------------+
+| NVIDIA-SMI 535.274.02             Driver Version: 535.274.02   CUDA Version: 12.2     |
+|-----------------------------------------+----------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |         Memory-Usage | GPU-Util  Compute M. |
+|                                         |                      |               MIG M. |
+|=========================================+======================+======================|
+|   0  NVIDIA A100-SXM-64GB           On  | 00000000:C8:00.0 Off |                    0 |
+| N/A   42C    P0              63W / 454W |      0MiB / 65536MiB |      0%      Default |
+|                                         |                      |             Disabled |
++-----------------------------------------+----------------------+----------------------+
+                                                                                         
++---------------------------------------------------------------------------------------+
+| Processes:                                                                            |
+|  GPU   GI   CI        PID   Type   Process name                            GPU Memory |
+|        ID   ID                                                             Usage      |
+|=======================================================================================|
+|  No running processes found                                                           |
++---------------------------------------------------------------------------------------+
+=============================================
+Training with convnext_base backbone with None trainable backbone stages
+[seed] CONFIG seed = 42
+Train/val data is already present in '/leonardo/home/userexternal/asathyan/2Fast2Detections/data/RRDataset_original_train_val'. Skipping download!
+Test subset is already extracted (4000 images found). Skipping download!
+
+--- Building group-aware train/val/test splits ---
+  original: 3000 images
+  transmitted+redigitalized (test_subset): 4000 images
+  -> train 4813 | val 1044 | test 1043 images
+
+Train subset size: 4813
+Validation subset size: 1044
+Test subset size: 1043
+
+============================================================
+PHASE 2: UNIMODAL BASELINES
+============================================================
+[model] Unimodal baselines use dual-stream: RGB=convnext_base + Bayar noise stream=resnet18
+
+Training Unimodal Baseline [binary] | 10 epochs
+Epoch [1/10] Loss: 0.4441
+  [Train] Acc: 78.85% | [Val] Acc: 86.78%
+  ★ New best model saved (86.78%)
+Epoch [2/10] Loss: 0.2941
+  [Train] Acc: 87.22% | [Val] Acc: 86.49%
+Epoch [3/10] Loss: 0.2268
+  [Train] Acc: 90.84% | [Val] Acc: 86.69%
+Epoch [4/10] Loss: 0.2053
+  [Train] Acc: 91.71% | [Val] Acc: 88.03%
+  ★ New best model saved (88.03%)
+Epoch [5/10] Loss: 0.1646
+  [Train] Acc: 93.46% | [Val] Acc: 89.46%
+  ★ New best model saved (89.46%)
+Epoch [6/10] Loss: 0.1513
+  [Train] Acc: 94.14% | [Val] Acc: 87.45%
+Epoch [7/10] Loss: 0.1314
+  [Train] Acc: 94.95% | [Val] Acc: 88.60%
+Epoch [8/10] Loss: 0.1049
+  [Train] Acc: 96.05% | [Val] Acc: 88.79%
+
+⚠ Early stopping triggered at epoch 8
+
+========================= Unimodal Binary Baseline (TEST) =========================
+              precision    recall  f1-score   support
+
+        Real     0.8718    0.9751    0.9206       523
+        Fake     0.9716    0.8558    0.9100       520
+
+    accuracy                         0.9156      1043
+   macro avg     0.9217    0.9155    0.9153      1043
+weighted avg     0.9216    0.9156    0.9153      1043
+
+
+Training Unimodal Baseline [transform] | 10 epochs
+Epoch [1/10] Loss: 0.3170
+  [Train] Acc: 87.43% | [Val] Acc: 94.54%
+  ★ New best model saved (94.54%)
+Epoch [2/10] Loss: 0.1418
+  [Train] Acc: 96.01% | [Val] Acc: 94.35%
+Epoch [3/10] Loss: 0.1172
+  [Train] Acc: 96.45% | [Val] Acc: 96.36%
+  ★ New best model saved (96.36%)
+Epoch [4/10] Loss: 0.1102
+  [Train] Acc: 96.76% | [Val] Acc: 96.84%
+  ★ New best model saved (96.84%)
+Epoch [5/10] Loss: 0.0763
+  [Train] Acc: 97.78% | [Val] Acc: 96.07%
+Epoch [6/10] Loss: 0.0706
+  [Train] Acc: 97.98% | [Val] Acc: 97.99%
+  ★ New best model saved (97.99%)
+Epoch [7/10] Loss: 0.0469
+  [Train] Acc: 98.55% | [Val] Acc: 98.37%
+  ★ New best model saved (98.37%)
+Epoch [8/10] Loss: 0.0494
+  [Train] Acc: 98.57% | [Val] Acc: 98.75%
+  ★ New best model saved (98.75%)
+Epoch [9/10] Loss: 0.0338
+  [Train] Acc: 99.13% | [Val] Acc: 98.95%
+  ★ New best model saved (98.95%)
+Epoch [10/10] Loss: 0.0241
+  [Train] Acc: 99.21% | [Val] Acc: 99.04%
+  ★ New best model saved (99.04%)
+
+========================= Unimodal Transform Baseline (TEST) =========================
+               precision    recall  f1-score   support
+
+     Original     0.9978    0.9978    0.9978       450
+  Transmitted     1.0000    0.9554    0.9772       314
+Redigitalized     0.9522    1.0000    0.9755       279
+
+     accuracy                         0.9856      1043
+    macro avg     0.9833    0.9844    0.9835      1043
+ weighted avg     0.9863    0.9856    0.9856      1043
+
+
+============================================================
+PHASE 3: MULTI-TASK JOINT TRAINING
+============================================================
+[model] Dual-stream: RGB=convnext_base + Bayar noise stream=resnet18
+
+Training [multitask_equal] | w1=0.3, w2=0.7 | 10 epochs
+Epoch [1/10] Loss: 0.3741
+  [Train] Real/Fake: 74.28% | Transform: 87.45%
+  [Val]   Real/Fake: 82.18% | Transform: 91.00%
+  ★ New best model saved (86.59%)
+Epoch [2/10] Loss: 0.2152
+  [Train] Real/Fake: 83.09% | Transform: 94.99%
+  [Val]   Real/Fake: 84.48% | Transform: 94.73%
+  ★ New best model saved (89.61%)
+Epoch [3/10] Loss: 0.1668
+  [Train] Real/Fake: 86.12% | Transform: 96.57%
+  [Val]   Real/Fake: 84.39% | Transform: 96.36%
+  ★ New best model saved (90.37%)
+Epoch [4/10] Loss: 0.1427
+  [Train] Real/Fake: 88.03% | Transform: 97.15%
+  [Val]   Real/Fake: 87.64% | Transform: 96.93%
+  ★ New best model saved (92.29%)
+Epoch [5/10] Loss: 0.1303
+  [Train] Real/Fake: 90.07% | Transform: 97.38%
+  [Val]   Real/Fake: 88.70% | Transform: 97.41%
+  ★ New best model saved (93.06%)
+Epoch [6/10] Loss: 0.0943
+  [Train] Real/Fake: 91.40% | Transform: 98.38%
+  [Val]   Real/Fake: 87.64% | Transform: 97.61%
+Epoch [7/10] Loss: 0.0825
+  [Train] Real/Fake: 93.16% | Transform: 98.48%
+  [Val]   Real/Fake: 88.60% | Transform: 97.03%
+Epoch [8/10] Loss: 0.0724
+  [Train] Real/Fake: 94.29% | Transform: 98.77%
+  [Val]   Real/Fake: 90.13% | Transform: 98.08%
+  ★ New best model saved (94.11%)
+Epoch [9/10] Loss: 0.0589
+  [Train] Real/Fake: 94.76% | Transform: 99.13%
+  [Val]   Real/Fake: 89.46% | Transform: 98.37%
+Epoch [10/10] Loss: 0.0578
+  [Train] Real/Fake: 94.89% | Transform: 99.17%
+  [Val]   Real/Fake: 90.23% | Transform: 98.08%
+  ★ New best model saved (94.16%)
+
+========================= Multi-Task Real/Fake (TEST) =========================
+              precision    recall  f1-score   support
+
+        Real     0.8895    0.9694    0.9277       523
+        Fake     0.9662    0.8788    0.9204       520
+
+    accuracy                         0.9243      1043
+   macro avg     0.9278    0.9241    0.9241      1043
+weighted avg     0.9277    0.9243    0.9241      1043
+
+  ROC-AUC: 0.9784 | Average Precision: 0.9815
+
+========================= Multi-Task Transformation (TEST) =========================
+               precision    recall  f1-score   support
+
+     Original     0.9934    1.0000    0.9967       450
+  Transmitted     0.9967    0.9522    0.9739       314
+Redigitalized     0.9586    0.9964    0.9772       279
+
+     accuracy                         0.9847      1043
+    macro avg     0.9829    0.9829    0.9826      1043
+ weighted avg     0.9851    0.9847    0.9846      1043
+
+
+============================================================
+PHASE 4: UNIMODAL vs MULTI-TASK COMPARISON
+============================================================
+
+############################################################
+UNIMODAL vs MULTI-TASK COMPARISON
+############################################################
+                    Model Real/Fake Acc (%) Transform Acc (%)
+   Unimodal (Binary only)             91.56               N/A
+Unimodal (Transform only)               N/A             98.56
+       Multi-task (Joint)             92.43             98.47
+
+  Delta (Binary):    +0.86% ↑ improved
+  Delta (Transform): -0.10% ↓ degraded
+
+============================================================
+PHASE 5: PER-TRANSFORMATION ACCURACY BREAKDOWN
+============================================================
+
+============================================================
+PER-TRANSFORMATION REAL/FAKE ACCURACY BREAKDOWN
+============================================================
+
+  [ORIGINAL] (n=450)
+    Overall Real/Fake Acc: 95.78%
+    Real images correct:   98.22% (n=225)
+    Fake images correct:   93.33% (n=225)
+
+  [TRANSMITTED] (n=314)
+    Overall Real/Fake Acc: 90.76%
+    Real images correct:   96.00% (n=150)
+    Fake images correct:   85.98% (n=164)
+
+  [REDIGITALIZED] (n=279)
+    Overall Real/Fake Acc: 88.89%
+    Real images correct:   95.95% (n=148)
+    Fake images correct:   80.92% (n=131)
+
+============================================================
+PHASE 6: CROSS-CLASS TRANSFORMATION TRACE ANALYSIS
+============================================================
+
+============================================================
+CROSS-CLASS TRANSFORMATION TRACE ANALYSIS
+============================================================
+
+Detailed 6-cell analysis:
+binary_class transform_type  n_samples  binary_acc  binary_misclass_rate  avg_confidence  transform_acc
+        real       original        225      0.9822                0.0178          0.9536         1.0000
+        real    transmitted        150      0.9600                0.0400          0.8936         0.9800
+        real  redigitalized        148      0.9595                0.0405          0.8740         1.0000
+        fake       original        225      0.9333                0.0667          0.9099         1.0000
+        fake    transmitted        164      0.8598                0.1402          0.8114         0.9268
+        fake  redigitalized        131      0.8092                0.1908          0.7333         0.9924
+
+============================================================
+PHASE 8: VISUAL INFERENCE
+============================================================
+
+============================================================
+PHASE 9: SAVING RESULTS
+============================================================
+
+============================================================
+ALL EXPERIMENTS COMPLETE! Total time: 10.9 minutes
+Results saved to: /leonardo/home/userexternal/asathyan/2Fast2Detections/results/
+Model checkpoints: /leonardo/home/userexternal/asathyan/2Fast2Detections/checkpoints/
+Experiment summary: /leonardo/home/userexternal/asathyan/2Fast2Detections/results/experiment_summary.json
+============================================================
+=============================================
+Job finished at: Sat Jun 13 20:41:56 CEST 2026
+=============================================

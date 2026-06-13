@@ -1,32 +1,20 @@
-"""
-Evaluation, analysis, and visualization functions.
-"""
-
 import os
+import json
+import time
 import torch
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score, average_precision_score
 from PIL import Image
+from globals import *
 
-from config import (
-    RESULTS_DIR, BINARY_MAP, INV_BINARY_MAP, INV_TRANSFORM_MAP,
-)
-
-
-# =============================================================================
-# Prediction Collection
-# =============================================================================
 @torch.no_grad()
 def collect_multitask_predictions(model, loader, device):
-    """Collect all predictions and labels from a multi-task model.
-
-    Supports multi-crop TTA batches: if images arrive as [B, K, C, H, W]
-    (see data.get_tta_transform), the K crops are run in one forward and the
-    softmax is averaged over crops before the argmax.
-    """
+    """Collect predictions and labels from a multi-task model (TTA supported)."""
     model.eval()
     all_preds_bin, all_labels_bin = [], []
     all_preds_trans, all_labels_trans = [], []
@@ -34,7 +22,7 @@ def collect_multitask_predictions(model, loader, device):
 
     for images, labels_bin, labels_trans in loader:
         images = images.to(device)
-        if images.dim() == 5:  # [B, K, C, H, W] TTA crops
+        if images.dim() == 5:  # TTA mode [B, K, C, H, W]
             b, k = images.shape[:2]
             out_bin, out_trans = model(images.flatten(0, 1))
             probs_bin = torch.softmax(out_bin, dim=1).view(b, k, -1).mean(dim=1)
@@ -45,10 +33,8 @@ def collect_multitask_predictions(model, loader, device):
             probs_trans = torch.softmax(out_trans, dim=1)
 
         all_probs_bin.extend(probs_bin.cpu().numpy())
-
         all_preds_bin.extend(torch.max(probs_bin, 1)[1].cpu().numpy())
         all_labels_bin.extend(labels_bin.numpy())
-
         all_preds_trans.extend(torch.max(probs_trans, 1)[1].cpu().numpy())
         all_labels_trans.extend(labels_trans.numpy())
 
@@ -60,20 +46,15 @@ def collect_multitask_predictions(model, loader, device):
         "labels_trans": np.array(all_labels_trans),
     }
 
-
 @torch.no_grad()
 def collect_singletask_predictions(model, loader, device):
-    """Collect all predictions and labels from a single-task model.
-
-    Supports multi-crop TTA batches ([B, K, C, H, W]) by averaging the softmax
-    over the K crops, as in collect_multitask_predictions.
-    """
+    """Collect predictions and labels from a single-task model (TTA supported)."""
     model.eval()
     all_preds, all_labels = [], []
 
     for images, labels in loader:
         images = images.to(device)
-        if images.dim() == 5:  # [B, K, C, H, W] TTA crops
+        if images.dim() == 5:
             b, k = images.shape[:2]
             out = model(images.flatten(0, 1))
             probs = torch.softmax(out, dim=1).view(b, k, -1).mean(dim=1)
@@ -84,22 +65,14 @@ def collect_singletask_predictions(model, loader, device):
 
     return np.array(all_preds), np.array(all_labels)
 
-
-# =============================================================================
-# Classification Reports & Confusion Matrices
-# =============================================================================
 def full_classification_report(preds, labels, class_names, task_title, probs=None):
-    """Print a full classification report with confusion matrix.
-
-    If `probs` (softmax outputs) is given for a binary task, also reports ROC-AUC
-    and average precision — the standard detection metrics in the AI-gen
-    detection literature (e.g. the RRBench benchmark)."""
+    """Generate and display classification reports and save confusion matrix heatmaps."""
     print(f"\n{'='*25} {task_title} {'='*25}")
     print(classification_report(labels, preds, target_names=class_names, digits=4))
 
     if probs is not None and len(class_names) == 2:
         probs = np.asarray(probs)
-        scores = probs[:, 1] if probs.ndim == 2 else probs  # P(fake)
+        scores = probs[:, 1] if probs.ndim == 2 else probs
         try:
             auc = roc_auc_score(labels, scores)
             ap = average_precision_score(labels, scores)
@@ -117,28 +90,11 @@ def full_classification_report(preds, labels, class_names, task_title, probs=Non
     plt.tight_layout()
     plt.savefig(os.path.join(RESULTS_DIR, f"cm_{task_title.replace(' ', '_').replace('/', '_')}.png"),
                 dpi=150, bbox_inches="tight")
-    plt.show()
-
+    plt.close()
     return cm
 
-
-# =============================================================================
-# Per-Transformation Breakdown
-# =============================================================================
 def per_transformation_breakdown(results, val_df):
-    """
-    Break down real/fake detection accuracy separately for each
-    transformation category (original, transmitted, redigitalized).
-    Also check whether the pattern differs between real and AI-generated images.
-
-    NOTE: the brief asks for a breakdown by "each re-digitization method"
-    (scan / printout-photo / screen-photo / projection). The extracted
-    test_subset filenames encode only the scenario (e.g. "redigital_normal_..."),
-    not the re-digitization method, so a per-method split is not possible with
-    this subset — the breakdown is at the transform-category level.
-    """
-    val_df_reset = val_df.reset_index(drop=True)
-
+    """Breakdown binary accuracy across transformation types."""
     preds_bin = results["preds_bin"]
     labels_bin = results["labels_bin"]
     labels_trans = results["labels_trans"]
@@ -156,14 +112,9 @@ def per_transformation_breakdown(results, val_df):
         subset_preds = preds_bin[mask]
         subset_labels = labels_bin[mask]
 
-        # Overall accuracy for this transformation
         overall_acc = (subset_preds == subset_labels).mean()
-
-        # Accuracy for real images under this transformation
         real_mask = subset_labels == BINARY_MAP["real"]
         real_acc = (subset_preds[real_mask] == subset_labels[real_mask]).mean() if real_mask.sum() > 0 else 0.0
-
-        # Accuracy for fake images under this transformation
         fake_mask = subset_labels == BINARY_MAP["fake"]
         fake_acc = (subset_preds[fake_mask] == subset_labels[fake_mask]).mean() if fake_mask.sum() > 0 else 0.0
 
@@ -188,7 +139,6 @@ def per_transformation_breakdown(results, val_df):
 
     breakdown_df = pd.DataFrame(rows)
 
-    # --- Plot grouped bar chart ---
     fig, ax = plt.subplots(figsize=(10, 6))
     x = np.arange(len(breakdown_df))
     width = 0.25
@@ -205,26 +155,17 @@ def per_transformation_breakdown(results, val_df):
     ax.legend()
     ax.set_ylim(0, 105)
 
-    # Add value labels on bars
     ax.bar_label(bars1, fmt='%.1f%%', padding=3, fontsize=8)
     ax.bar_label(bars2, fmt='%.1f%%', padding=3, fontsize=8)
     ax.bar_label(bars3, fmt='%.1f%%', padding=3, fontsize=8)
 
     plt.tight_layout()
     plt.savefig(os.path.join(RESULTS_DIR, "per_transformation_breakdown.png"), dpi=150, bbox_inches="tight")
-    plt.show()
-
+    plt.close()
     return breakdown_df
 
-
-# =============================================================================
-# Cross-Class Trace Analysis
-# =============================================================================
 def cross_class_trace_analysis(results):
-    """
-    Investigate whether AI-generated and real images respond differently
-    to the same post-processing operations.
-    """
+    """Analyze predictions across a 2x3 grid of class vs transformation."""
     preds_bin = results["preds_bin"]
     labels_bin = results["labels_bin"]
     preds_trans = results["preds_trans"]
@@ -235,7 +176,6 @@ def cross_class_trace_analysis(results):
     print("CROSS-CLASS TRANSFORMATION TRACE ANALYSIS")
     print(f"{'='*60}")
 
-    # Build a 6-cell analysis: (real/fake) x (original/transmitted/redigitalized)
     rows = []
     for bin_id, bin_name in INV_BINARY_MAP.items():
         for trans_id, trans_name in INV_TRANSFORM_MAP.items():
@@ -251,7 +191,6 @@ def cross_class_trace_analysis(results):
             avg_confidence = subset_probs[np.arange(len(subset_labels_bin)), subset_labels_bin].mean()
             misclass_rate = 1.0 - bin_acc
 
-            # Transformation classification accuracy for this cell
             subset_preds_trans = preds_trans[mask]
             subset_labels_trans = labels_trans[mask]
             trans_acc = (subset_preds_trans == subset_labels_trans).mean()
@@ -267,32 +206,27 @@ def cross_class_trace_analysis(results):
             })
 
     trace_df = pd.DataFrame(rows)
-    print("\nDetailed 6-cell analysis (binary_class × transform_type):")
+    print("\nDetailed 6-cell analysis:")
     print(trace_df.to_string(index=False, float_format="%.4f"))
 
-    # --- Heatmap: Binary accuracy across the 2x3 grid ---
     pivot_acc = trace_df.pivot(index="binary_class", columns="transform_type", values="binary_acc")
     pivot_misclass = trace_df.pivot(index="binary_class", columns="transform_type", values="binary_misclass_rate")
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-
-    sns.heatmap(pivot_acc * 100, annot=True, fmt=".1f", cmap="YlGnBu", ax=axes[0],
-                vmin=50, vmax=100)
+    sns.heatmap(pivot_acc * 100, annot=True, fmt=".1f", cmap="YlGnBu", ax=axes[0], vmin=50, vmax=100)
     axes[0].set_title("Real/Fake Accuracy (%) by Class × Transformation")
     axes[0].set_ylabel("True Binary Class")
     axes[0].set_xlabel("Transformation Type")
 
-    sns.heatmap(pivot_misclass * 100, annot=True, fmt=".1f", cmap="YlOrRd", ax=axes[1],
-                vmin=0, vmax=50)
+    sns.heatmap(pivot_misclass * 100, annot=True, fmt=".1f", cmap="YlOrRd", ax=axes[1], vmin=0, vmax=50)
     axes[1].set_title("Misclassification Rate (%) by Class × Transformation")
     axes[1].set_ylabel("True Binary Class")
     axes[1].set_xlabel("Transformation Type")
 
     plt.tight_layout()
     plt.savefig(os.path.join(RESULTS_DIR, "cross_class_traces.png"), dpi=150, bbox_inches="tight")
-    plt.show()
+    plt.close()
 
-    # --- Confidence distribution comparison ---
     fig, axes = plt.subplots(1, 3, figsize=(16, 5))
     for i, (trans_id, trans_name) in enumerate(INV_TRANSFORM_MAP.items()):
         ax = axes[i]
@@ -300,7 +234,6 @@ def cross_class_trace_analysis(results):
             mask = (labels_bin == bin_id) & (labels_trans == trans_id)
             if mask.sum() == 0:
                 continue
-            # Confidence of the correct class
             correct_conf = probs_bin[mask, bin_id]
             ax.hist(correct_conf, bins=20, alpha=0.5, label=f"{bin_name.capitalize()} images",
                     density=True, edgecolor="black", linewidth=0.5)
@@ -313,25 +246,16 @@ def cross_class_trace_analysis(results):
 
     plt.tight_layout()
     plt.savefig(os.path.join(RESULTS_DIR, "confidence_distributions.png"), dpi=150, bbox_inches="tight")
-    plt.show()
-
+    plt.close()
     return trace_df
 
-
-# =============================================================================
-# Training Curve Visualization
-# =============================================================================
 def plot_training_curves(logger, title="Training Curves", filename="training_curves.png"):
-    """Plot loss and accuracy curves from a TrainingLogger."""
+    """Plot metrics across epochs."""
     history = logger.to_dataframe()
-
-    # Detect if this is a multi-task or single-task logger
     is_multitask = "train_acc_bin" in history.columns
 
     if is_multitask:
         fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-
-        # Loss
         axes[0, 0].plot(history["epoch"], history["train_loss"], 'o-', label="Train Total Loss")
         axes[0, 0].plot(history["epoch"], history["train_loss_bin"], 's--', label="Train Binary Loss", alpha=0.7)
         axes[0, 0].plot(history["epoch"], history["train_loss_trans"], '^--', label="Train Transform Loss", alpha=0.7)
@@ -341,7 +265,6 @@ def plot_training_curves(logger, title="Training Curves", filename="training_cur
         axes[0, 0].legend()
         axes[0, 0].grid(True, alpha=0.3)
 
-        # Val Loss
         axes[0, 1].plot(history["epoch"], history["val_loss_bin"], 's-', label="Val Binary Loss", color="orange")
         axes[0, 1].plot(history["epoch"], history["val_loss_trans"], '^-', label="Val Transform Loss", color="red")
         axes[0, 1].set_title("Validation Loss")
@@ -350,7 +273,6 @@ def plot_training_curves(logger, title="Training Curves", filename="training_cur
         axes[0, 1].legend()
         axes[0, 1].grid(True, alpha=0.3)
 
-        # Train Accuracy
         axes[1, 0].plot(history["epoch"], history["train_acc_bin"].apply(lambda x: x*100), 'o-', label="Binary")
         axes[1, 0].plot(history["epoch"], history["train_acc_trans"].apply(lambda x: x*100), 's-', label="Transform")
         axes[1, 0].set_title("Training Accuracy")
@@ -359,7 +281,6 @@ def plot_training_curves(logger, title="Training Curves", filename="training_cur
         axes[1, 0].legend()
         axes[1, 0].grid(True, alpha=0.3)
 
-        # Val Accuracy
         axes[1, 1].plot(history["epoch"], history["val_acc_bin"].apply(lambda x: x*100), 'o-', label="Binary")
         axes[1, 1].plot(history["epoch"], history["val_acc_trans"].apply(lambda x: x*100), 's-', label="Transform")
         axes[1, 1].set_title("Validation Accuracy")
@@ -367,10 +288,8 @@ def plot_training_curves(logger, title="Training Curves", filename="training_cur
         axes[1, 1].set_ylabel("Accuracy (%)")
         axes[1, 1].legend()
         axes[1, 1].grid(True, alpha=0.3)
-
     else:
         fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-
         axes[0].plot(history["epoch"], history["train_loss"], 'o-', label="Train")
         axes[0].plot(history["epoch"], history["val_loss"], 's-', label="Val")
         axes[0].set_title("Loss")
@@ -390,14 +309,10 @@ def plot_training_curves(logger, title="Training Curves", filename="training_cur
     fig.suptitle(title, fontsize=14, fontweight="bold")
     plt.tight_layout()
     plt.savefig(os.path.join(RESULTS_DIR, filename), dpi=150, bbox_inches="tight")
-    plt.show()
+    plt.close()
 
-
-# =============================================================================
-# Visual Inference
-# =============================================================================
 def run_visual_inference(model, df, val_transform, device, num_samples=6):
-    """Display model predictions on random images."""
+    """Performs visual inference on sample images and saves display plots."""
     model.eval()
     samples = df.sample(num_samples, random_state=np.random.randint(1, 10000))
 
@@ -426,21 +341,16 @@ def run_visual_inference(model, df, val_transform, device, num_samples=6):
         )
         ax.axis("off")
 
-    # Hide unused axes
     for j in range(i + 1, len(axes)):
         axes[j].axis("off")
 
     plt.tight_layout()
     plt.savefig(os.path.join(RESULTS_DIR, "visual_inference.png"), dpi=150, bbox_inches="tight")
-    plt.show()
+    plt.close()
 
-
-# =============================================================================
-# Comparative Summary
-# =============================================================================
 def print_comparative_summary(unimodal_bin_acc, unimodal_trans_acc,
-                              multitask_bin_acc, multitask_trans_acc):
-    """Compare unimodal baselines against multi-task model."""
+                               multitask_bin_acc, multitask_trans_acc):
+    """Compares baseline unimodal accuracies against multitask accuracy."""
     print(f"\n{'#'*60}")
     print("UNIMODAL vs MULTI-TASK COMPARISON")
     print(f"{'#'*60}")
@@ -448,41 +358,32 @@ def print_comparative_summary(unimodal_bin_acc, unimodal_trans_acc,
     data = {
         "Model": ["Unimodal (Binary only)", "Unimodal (Transform only)", "Multi-task (Joint)"],
         "Real/Fake Acc (%)": [
-            f"{unimodal_bin_acc*100:.2f}",
+            f"{unimodal_bin_acc*100:.2f}" if unimodal_bin_acc is not None else "N/A",
             "N/A",
-            f"{multitask_bin_acc*100:.2f}",
+            f"{multitask_bin_acc*100:.2f}" if multitask_bin_acc is not None else "N/A",
         ],
         "Transform Acc (%)": [
             "N/A",
-            f"{unimodal_trans_acc*100:.2f}",
-            f"{multitask_trans_acc*100:.2f}",
+            f"{unimodal_trans_acc*100:.2f}" if unimodal_trans_acc is not None else "N/A",
+            f"{multitask_trans_acc*100:.2f}" if multitask_trans_acc is not None else "N/A",
         ],
     }
 
     comparison_df = pd.DataFrame(data)
     print(comparison_df.to_string(index=False))
 
-    # Determine if joint training helps
-    bin_delta = multitask_bin_acc - unimodal_bin_acc
-    trans_delta = multitask_trans_acc - unimodal_trans_acc
+    if unimodal_bin_acc is not None and unimodal_trans_acc is not None and multitask_bin_acc is not None and multitask_trans_acc is not None:
+        bin_delta = multitask_bin_acc - unimodal_bin_acc
+        trans_delta = multitask_trans_acc - unimodal_trans_acc
+        print(f"\n  Delta (Binary):    {bin_delta*100:+.2f}% "
+              f"{'↑ improved' if bin_delta > 0 else '↓ degraded' if bin_delta < 0 else '= unchanged'}")
+        print(f"  Delta (Transform): {trans_delta*100:+.2f}% "
+              f"{'↑ improved' if trans_delta > 0 else '↓ degraded' if trans_delta < 0 else '= unchanged'}")
 
-    print(f"\n  Delta (Binary):    {bin_delta*100:+.2f}% "
-          f"{'↑ improved' if bin_delta > 0 else '↓ degraded' if bin_delta < 0 else '= unchanged'}")
-    print(f"  Delta (Transform): {trans_delta*100:+.2f}% "
-          f"{'↑ improved' if trans_delta > 0 else '↓ degraded' if trans_delta < 0 else '= unchanged'}")
-
-    if bin_delta > 0 and trans_delta > 0:
-        print("\n  ✓ Joint training IMPROVES both tasks — the tasks complement each other.")
-    elif bin_delta < 0 and trans_delta < 0:
-        print("\n  ✗ Joint training DEGRADES both tasks — the tasks compete for capacity.")
-    else:
-        print("\n  ~ Joint training has mixed effects — partial complementarity.")
-
-    # Plot comparison
     fig, ax = plt.subplots(figsize=(8, 5))
     models_list = ["Unimodal\n(Binary)", "Unimodal\n(Transform)", "Multi-task\n(Joint)"]
-    bin_accs = [unimodal_bin_acc * 100, 0, multitask_bin_acc * 100]
-    trans_accs = [0, unimodal_trans_acc * 100, multitask_trans_acc * 100]
+    bin_accs = [unimodal_bin_acc * 100 if unimodal_bin_acc is not None else 0, 0, multitask_bin_acc * 100 if multitask_bin_acc is not None else 0]
+    trans_accs = [0, unimodal_trans_acc * 100 if unimodal_trans_acc is not None else 0, multitask_trans_acc * 100 if multitask_trans_acc is not None else 0]
 
     x = np.arange(len(models_list))
     width = 0.35
@@ -490,7 +391,6 @@ def print_comparative_summary(unimodal_bin_acc, unimodal_trans_acc,
     bars1 = ax.bar(x - width/2, bin_accs, width, label="Real/Fake Acc", color="#4C72B0")
     bars2 = ax.bar(x + width/2, trans_accs, width, label="Transform Acc", color="#DD8452")
 
-    # Add value labels on bars, showing only non-zero validation accuracy values
     labels1 = [f'{val:.1f}%' if val > 0 else '' for val in bin_accs]
     labels2 = [f'{val:.1f}%' if val > 0 else '' for val in trans_accs]
     ax.bar_label(bars1, labels=labels1, padding=3, fontsize=9)
@@ -504,6 +404,71 @@ def print_comparative_summary(unimodal_bin_acc, unimodal_trans_acc,
     ax.set_ylim(0, 105)
     plt.tight_layout()
     plt.savefig(os.path.join(RESULTS_DIR, "unimodal_vs_multitask.png"), dpi=150, bbox_inches="tight")
-    plt.show()
-
+    plt.close()
     return comparison_df
+
+def run_comparison_and_analysis(results, test_df, val_tfm, model_mt,
+                                 unimodal_bin_acc, unimodal_trans_acc,
+                                 multitask_bin_acc, multitask_trans_acc):
+    """Executes full suite of evaluations and visual analysis."""
+    print("\n" + "=" * 60)
+    print("PHASE 4: UNIMODAL vs MULTI-TASK COMPARISON")
+    print("=" * 60)
+    comparison_df = print_comparative_summary(
+        unimodal_bin_acc, unimodal_trans_acc,
+        multitask_bin_acc, multitask_trans_acc
+    )
+
+    print("\n" + "=" * 60)
+    print("PHASE 5: PER-TRANSFORMATION ACCURACY BREAKDOWN")
+    print("=" * 60)
+    breakdown_df = per_transformation_breakdown(results, test_df)
+
+    print("\n" + "=" * 60)
+    print("PHASE 6: CROSS-CLASS TRANSFORMATION TRACE ANALYSIS")
+    print("=" * 60)
+    trace_df = cross_class_trace_analysis(results)
+
+    print("\n" + "=" * 60)
+    print("PHASE 8: VISUAL INFERENCE")
+    print("=" * 60)
+    run_visual_inference(model_mt, test_df, val_tfm, CONFIG["device"], num_samples=6)
+
+    return comparison_df, breakdown_df, trace_df
+
+def save_results(model_mt, start_time,
+                 unimodal_bin_acc, unimodal_trans_acc,
+                 multitask_bin_acc, multitask_trans_acc,
+                 ablation_df, breakdown_df, trace_df):
+    """Saves all evaluation results to JSON and serializes the model checkpoint."""
+    print("\n" + "=" * 60)
+    print("PHASE 9: SAVING RESULTS")
+    print("=" * 60)
+
+    final_summary = {
+        "config": {k: str(v) for k, v in CONFIG.items()},
+        "evaluation_split": "test",
+        "unimodal_binary_test_acc": float(unimodal_bin_acc) if unimodal_bin_acc is not None else 0.0,
+        "unimodal_transform_test_acc": float(unimodal_trans_acc) if unimodal_trans_acc is not None else 0.0,
+        "multitask_binary_test_acc": float(multitask_bin_acc) if multitask_bin_acc is not None else 0.0,
+        "multitask_transform_test_acc": float(multitask_trans_acc) if multitask_trans_acc is not None else 0.0,
+        "ablation_results": ablation_df.to_dict(orient="records") if ablation_df is not None else [],
+        "per_transformation_breakdown": breakdown_df.to_dict(orient="records") if breakdown_df is not None else [],
+        "cross_class_traces": trace_df.to_dict(orient="records") if trace_df is not None else [],
+        "total_training_time_minutes": (time.time() - start_time) / 60,
+    }
+
+    summary_path = os.path.join(RESULTS_DIR, "experiment_summary.json")
+    with open(summary_path, "w") as f:
+        json.dump(final_summary, f, indent=2)
+
+    final_model_path = os.path.join(CHECKPOINTS_DIR, "final_multitask_model.pth")
+    torch.save(model_mt.state_dict(), final_model_path)
+
+    elapsed = (time.time() - start_time) / 60
+    print(f"\n{'='*60}")
+    print(f"ALL EXPERIMENTS COMPLETE! Total time: {elapsed:.1f} minutes")
+    print(f"Results saved to: {RESULTS_DIR}/")
+    print(f"Model checkpoints: {CHECKPOINTS_DIR}/")
+    print(f"Experiment summary: {summary_path}")
+    print(f"{'='*60}")

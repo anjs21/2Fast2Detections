@@ -225,3 +225,5 @@ data/
 /*/logs/
 
 checkpoints/
+
+metadata*
