@@ -193,6 +193,7 @@ cython_debug/
 #   Ignore directories containing user credentials, local state, and settings.
 #   Learn more at https://abstra.io/docs
 .abstra/
+logs/
 
 # Visual Studio Code
 #   Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
@@ -227,3 +228,6 @@ data/
 checkpoints/
 
 metadata*
+Freshdata*
+*freshdata*
+results/freshdata/
